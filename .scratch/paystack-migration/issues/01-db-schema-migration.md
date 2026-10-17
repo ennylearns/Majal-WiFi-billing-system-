@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Drop the `mpesaReceiptNumber` field from the Payment model
-- [ ] Add a `paymentReference` field (String, nullable, unique) to the Payment model to store the Paystack transaction reference
-- [ ] Change the `paymentMethod` field default from `"MPESA"` to `"PAYSTACK"`
-- [ ] Generate and apply a Prisma migration (`prisma migrate dev`)
-- [ ] Confirm the database reflects the new schema with no data loss on a fresh seed
+- [x] Drop the `mpesaReceiptNumber` field from the Payment model
+- [x] Add a `paymentReference` field (String, nullable, unique) to the Payment model to store the Paystack transaction reference
+- [x] Change the `paymentMethod` field default from `"MPESA"` to `"PAYSTACK"`
+- [x] Generate and apply a Prisma migration (`prisma migrate dev`)
+- [x] Confirm the database reflects the new schema with no data loss on a fresh seed

@@ -201,7 +201,7 @@ class MpesaService {
         where: { checkoutRequestId: CheckoutRequestID },
         data: {
           status: ResultCode === 0 ? 'COMPLETED' : 'FAILED',
-          mpesaReceiptNumber: mpesaReceiptNumber
+          paymentReference: mpesaReceiptNumber
         }
       });
 
