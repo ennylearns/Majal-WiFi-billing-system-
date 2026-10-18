@@ -5,8 +5,8 @@ class SMSService {
 
   constructor() {
     const africasTalking = AfricasTalking({
-      apiKey: process.env.AFRICASTALKING_API_KEY!,
-      username: process.env.AFRICASTALKING_USERNAME!
+      apiKey: process.env.AFRICASTALKING_API_KEY || 'sandbox_key',
+      username: process.env.AFRICASTALKING_USERNAME || 'sandbox'
     });
     
     this.sms = africasTalking.SMS;

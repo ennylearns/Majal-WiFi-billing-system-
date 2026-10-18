@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import mpesaService from '../services/mpesaService';
+import paystackService from '../services/paystackService';
 import sessionService from '../services/sessionService';
 import smsService from '../services/smsService';
 
@@ -153,7 +153,8 @@ router.post('/login', [
 router.post('/payment', [
   body('phone').isMobilePhone('any').withMessage('Valid phone number required'),
   body('planId').isUUID().withMessage('Valid plan ID required'),
-  body('amount').isFloat({ min: 1 }).withMessage('Valid amount required')
+  body('amount').isFloat({ min: 1 }).withMessage('Valid amount required'),
+  body('email').optional().isEmail().withMessage('Valid email required')
 ], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -161,7 +162,7 @@ router.post('/payment', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { phone, planId, amount } = req.body;
+    const { phone, planId, amount, email } = req.body;
 
     // Get or create user
     let user = await prisma.user.findUnique({
@@ -172,6 +173,7 @@ router.post('/payment', [
       user = await prisma.user.create({
         data: {
           phone,
+          email: email || undefined,
           role: 'CUSTOMER'
         }
       });
@@ -186,7 +188,7 @@ router.post('/payment', [
       return res.status(404).json({ success: false, error: 'Plan not found or inactive' });
     }
 
-    // Create payment record
+    // Create payment record in PENDING status
     const payment = await prisma.payment.create({
       data: {
         userId: user.id,
@@ -196,28 +198,31 @@ router.post('/payment', [
       }
     });
 
-    // Initiate M-Pesa STK Push
-    const stkResponse = await mpesaService.initiateSTKPush({
-      phone,
+    // Initiate Paystack transaction
+    const customerEmail = email || user.email || `${phone.replace(/[^0-9]/g, '')}@collospot.com`;
+    const paystackResponse = await paystackService.initiateTransaction(
+      customerEmail,
       amount,
-      accountReference: `COLLOSPOT-${payment.id}`,
-      transactionDesc: `Payment for ${plan.name}`
-    });
+      plan.id,
+      payment.id
+    );
 
-    // Update payment with checkout request ID
+    // Update payment with checkout request ID set to Paystack reference
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        checkoutRequestId: stkResponse.CheckoutRequestID
+        checkoutRequestId: paystackResponse.reference
       }
     });
 
     res.json({
       success: true,
       data: {
-        checkoutRequestId: stkResponse.CheckoutRequestID,
-        customerMessage: stkResponse.CustomerMessage
-      }
+        reference: paystackResponse.reference,
+        access_code: paystackResponse.access_code
+      },
+      reference: paystackResponse.reference,
+      access_code: paystackResponse.access_code
     });
   } catch (error) {
     console.error('Payment initiation error:', error);
@@ -230,8 +235,13 @@ router.get('/payment/status/:checkoutRequestId', async (req: Request, res: Respo
   try {
     const { checkoutRequestId } = req.params;
 
-    const payment = await prisma.payment.findUnique({
-      where: { checkoutRequestId },
+    const payment = await prisma.payment.findFirst({
+      where: {
+        OR: [
+          { checkoutRequestId },
+          { paymentReference: checkoutRequestId }
+        ]
+      },
       include: { user: true, plan: true }
     });
 
@@ -239,7 +249,7 @@ router.get('/payment/status/:checkoutRequestId', async (req: Request, res: Respo
       return res.status(404).json({ success: false, error: 'Payment not found' });
     }
 
-    // If payment is completed, create session
+    // If payment is completed, ensure session exists and return sessionToken
     if (payment.status === 'COMPLETED') {
       const existingSession = await prisma.session.findFirst({
         where: {
@@ -249,18 +259,19 @@ router.get('/payment/status/:checkoutRequestId', async (req: Request, res: Respo
         }
       });
 
-      if (!existingSession) {
-        const sessionToken = generateSessionToken();
+      let sessionToken = existingSession?.sessionToken;
+      if (!sessionToken) {
+        sessionToken = generateSessionToken();
         await sessionService.createSession(payment.userId, payment.planId, sessionToken);
-        
-        return res.json({
-          success: true,
-          data: {
-            status: 'completed',
-            sessionToken
-          }
-        });
       }
+
+      return res.json({
+        success: true,
+        data: {
+          status: 'completed',
+          sessionToken
+        }
+      });
     }
 
     res.json({
@@ -306,15 +317,16 @@ router.post('/connect', [
   }
 });
 
-// M-Pesa callback
-router.post('/payment/mpesa/callback', async (req: Request, res: Response) => {
+// Paystack webhook
+router.post('/payment/paystack/webhook', async (req: Request, res: Response) => {
   try {
-    await mpesaService.handleCallback(req.body);
-    res.json({ success: true });
+    const signature = (req.headers['x-paystack-signature'] as string) || '';
+    const rawBody = (req as any).rawBody || req.body;
+    await paystackService.handleWebhook(rawBody, signature);
   } catch (error) {
-    console.error('Callback error:', error);
-    res.status(500).json({ success: false });
+    console.error('Paystack webhook error:', error);
   }
+  res.status(200).send('OK');
 });
 
 // Helper function
