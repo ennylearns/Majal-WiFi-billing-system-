@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `MikrotikService` constructor accepts `{host, port, username, password}` parameters
-- [ ] When constructed with explicit credentials, those credentials are used — env vars are ignored
-- [ ] The existing module-level singleton (constructed from env vars) is still exported and unchanged
-- [ ] All existing call sites in `sessionService` and `admin` routes continue to compile and run without modification
-- [ ] Unit tests exist for each public method of the class, using stub credentials and a mocked `RouterOSAPI`
-- [ ] All tests pass
+- [x] `MikrotikService` constructor accepts `{host, port, username, password}` parameters
+- [x] When constructed with explicit credentials, those credentials are used - env vars are ignored
+- [x] The existing module-level singleton (constructed from env vars) is still exported and unchanged
+- [x] All existing call sites in `sessionService` and `admin` routes continue to compile and run without modification
+- [x] Unit tests exist for each public method of the class, using stub credentials and a mocked `RouterOSAPI`
+- [x] All tests pass

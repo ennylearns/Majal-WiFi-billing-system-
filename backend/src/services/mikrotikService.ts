@@ -1,6 +1,15 @@
 import { RouterOSAPI } from 'node-routeros';
 
-interface UserSession {
+export interface MikrotikCredentials {
+  host: string;
+  port?: number | string;
+  username: string;
+  password?: string;
+}
+
+export type MikrotikConfig = MikrotikCredentials;
+
+export interface UserSession {
   sessionId: string;
   username: string;
   ipAddress: string;
@@ -10,20 +19,29 @@ interface UserSession {
   uptime: string;
 }
 
-class MikrotikService {
-  private api: RouterOSAPI;
-  private host: string;
-  private username: string;
-  private password: string;
-  private port: number;
+export class MikrotikService {
+  public readonly api: RouterOSAPI;
+  public readonly host: string;
+  public readonly username: string;
+  public readonly password: string;
+  public readonly port: number;
 
-  constructor() {
-    this.host = process.env.MIKROTIK_HOST || '192.168.1.1';
-    this.username = process.env.MIKROTIK_USERNAME || 'admin';
-    this.password = process.env.MIKROTIK_PASSWORD || '';
-    this.port = parseInt(process.env.MIKROTIK_PORT || '8728');
-    
-    this.api = new RouterOSAPI({
+  constructor(credentials?: MikrotikCredentials, api?: RouterOSAPI) {
+    if (credentials) {
+      this.host = credentials.host;
+      this.username = credentials.username;
+      this.password = credentials.password ?? '';
+      this.port = typeof credentials.port === 'string'
+        ? parseInt(credentials.port, 10)
+        : (credentials.port ?? 8728);
+    } else {
+      this.host = process.env.MIKROTIK_HOST || '192.168.1.1';
+      this.username = process.env.MIKROTIK_USERNAME || 'admin';
+      this.password = process.env.MIKROTIK_PASSWORD || '';
+      this.port = parseInt(process.env.MIKROTIK_PORT || '8728', 10);
+    }
+
+    this.api = api || new RouterOSAPI({
       host: this.host,
       user: this.username,
       password: this.password,
