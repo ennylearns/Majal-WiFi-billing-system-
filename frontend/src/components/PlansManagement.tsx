@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, Zap, Clock, Download, DollarSign, X } from 'lucide-react'
+import { Plus, Edit, Trash2, Zap, Clock, Download, X } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import { formatCurrency, formatDuration } from '../utils/formatters'
 import toast from 'react-hot-toast'

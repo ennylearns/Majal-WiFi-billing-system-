@@ -243,4 +243,95 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
     const res = await fetch(`${baseUrl}/payment/status/unknown_ref_12345`);
     assert.equal(res.status, 404);
   });
+
+  test('POST /api/public/payment succeeds without phone provided', async () => {
+    const res = await fetch(`${baseUrl}/payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        planId: testPlanId,
+        amount: 25
+      })
+    });
+
+    assert.equal(res.status, 200);
+    const body = await res.json() as any;
+    const reference = body.reference || body.data?.reference;
+    assert.ok(reference);
+  });
+
+  test('Full payment-to-connection flow completes in dev mode', async () => {
+    const crypto = await import('crypto');
+    const secret = process.env.PAYSTACK_SECRET_KEY || 'sk_test_mock_secret_key';
+
+    // 1. Initiate payment (as portal does when clicking Pay)
+    const initRes = await fetch(`${baseUrl}/payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        planId: testPlanId,
+        amount: 50
+      })
+    });
+    assert.equal(initRes.status, 200);
+    const initBody = await initRes.json() as any;
+    const reference = initBody.reference || initBody.data?.reference;
+    const accessCode = initBody.access_code || initBody.data?.access_code;
+    assert.ok(reference);
+    assert.ok(accessCode);
+
+    // 2. Initial polling returns pending
+    const statusPendingRes = await fetch(`${baseUrl}/payment/status/${reference}`);
+    assert.equal(statusPendingRes.status, 200);
+    const statusPendingBody = await statusPendingRes.json() as any;
+    assert.equal(statusPendingBody.data.status, 'pending');
+
+    // 3. Webhook delivers charge.success
+    const payment = await prisma.payment.findFirst({ where: { checkoutRequestId: reference } });
+    assert.ok(payment);
+    const webhookPayload = {
+      event: 'charge.success',
+      data: {
+        reference,
+        status: 'success',
+        amount: 5000,
+        metadata: {
+          planId: testPlanId,
+          paymentId: payment.id
+        }
+      }
+    };
+    const rawBody = JSON.stringify(webhookPayload);
+    const signature = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
+
+    const webhookRes = await fetch(`${baseUrl}/payment/paystack/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-paystack-signature': signature
+      },
+      body: rawBody
+    });
+    assert.equal(webhookRes.status, 200);
+
+    // 4. Polling returns completed and sessionToken
+    const statusCompletedRes = await fetch(`${baseUrl}/payment/status/${reference}`);
+    assert.equal(statusCompletedRes.status, 200);
+    const statusCompletedBody = await statusCompletedRes.json() as any;
+    assert.equal(statusCompletedBody.data.status, 'completed');
+    const sessionToken = statusCompletedBody.data.sessionToken;
+    assert.ok(sessionToken);
+
+    // 5. Connect to internet with sessionToken
+    const connectRes = await fetch(`${baseUrl}/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken })
+    });
+    assert.equal(connectRes.status, 200);
+    const connectBody = await connectRes.json() as any;
+    assert.equal(connectBody.success, true);
+    assert.ok(connectBody.data.session.plan);
+    assert.ok(connectBody.data.session.endTime);
+  });
 });

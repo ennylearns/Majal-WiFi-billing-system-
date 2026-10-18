@@ -1,5 +1,5 @@
 import React from 'react'
-import { Users, DollarSign, Wifi, TrendingUp, Activity, Clock, ArrowUpRight, ArrowDownRight, Zap } from 'lucide-react'
+import { Users, DollarSign, Wifi, TrendingUp, Activity, Clock, ArrowUpRight, Zap } from 'lucide-react'
 import { formatCurrency } from '../utils/formatters'
 import { useNavigate } from 'react-router-dom'
 import type { DashboardStats } from '../types'

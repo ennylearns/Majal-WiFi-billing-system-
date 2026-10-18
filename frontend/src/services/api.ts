@@ -9,7 +9,8 @@ import type {
   DashboardStats,
   Session,
   Payment,
-  PaginatedResponse
+  PaginatedResponse,
+  PaymentInitiateData
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -66,7 +67,7 @@ export const publicAPI = {
     publicApi.post('/public/login', data).then(res => res.data),
 
   // Payments
-  makePayment: (data: PaymentRequest): Promise<ApiResponse<{ checkoutRequestId: string; customerMessage: string }>> =>
+  makePayment: (data: PaymentRequest): Promise<ApiResponse<PaymentInitiateData> & { reference?: string; access_code?: string }> =>
     publicApi.post('/public/payment', data).then(res => res.data),
 
   getPaymentStatus: (checkoutRequestId: string): Promise<ApiResponse<PaymentStatusResponse>> =>

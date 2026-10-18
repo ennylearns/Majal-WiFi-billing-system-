@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Wifi, Search, Filter, Power, Clock, User, Activity } from 'lucide-react'
+import { Power, Clock, User, Activity } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import { formatCurrency } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import type { Session, PaginatedResponse } from '../types'
+import type { Session } from '../types'
 
 const SessionsManagement: React.FC = () => {
   const [sessions, setSessions] = useState<Session[]>([])
@@ -26,7 +26,7 @@ const SessionsManagement: React.FC = () => {
       })
       
       if (response.success && response.data) {
-        setSessions(response.data.sessions)
+        setSessions(response.data.sessions || response.data.data || [])
         setTotalPages(response.data.pagination.pages)
       }
     } catch (error) {
@@ -47,16 +47,6 @@ const SessionsManagement: React.FC = () => {
       }
     }
   }
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active': return 'bg-green-100 text-green-900 border border-green-200'
-      case 'expired': return 'bg-yellow-100 text-yellow-900 border border-yellow-200'
-      case 'terminated': return 'bg-red-100 text-red-900 border border-red-200'
-      default: return 'bg-gray-100 text-gray-900 border border-gray-200'
-    }
-  }
-
   const formatDuration = (start: string, end?: string) => {
     const startTime = new Date(start)
     const endTime = end ? new Date(end) : new Date()

@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Search, Filter, MoreVertical, Phone, Mail, Calendar, Activity } from 'lucide-react'
+import { Users, Search, Filter, MoreVertical, Phone, Mail, Calendar } from 'lucide-react'
 import { adminAPI } from '../services/api'
-import { formatCurrency } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import type { User, PaginatedResponse } from '../types'
+import type { User } from '../types'
 
 const UsersManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([])
@@ -11,7 +10,7 @@ const UsersManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [, setSelectedUser] = useState<User | null>(null)
 
   useEffect(() => {
     fetchUsers()
@@ -27,7 +26,7 @@ const UsersManagement: React.FC = () => {
       })
       
       if (response.success && response.data) {
-        setUsers(response.data.users)
+        setUsers(response.data.users || response.data.data || [])
         setTotalPages(response.data.pagination.pages)
       }
     } catch (error) {

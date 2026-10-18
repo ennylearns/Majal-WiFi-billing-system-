@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { DollarSign, Search, Filter, Download, Calendar, CreditCard } from 'lucide-react'
+import { DollarSign, Download, Calendar, CreditCard } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import { formatCurrency } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import type { Payment, PaginatedResponse } from '../types'
+import type { Payment } from '../types'
 
 const PaymentsManagement: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([])
@@ -26,7 +26,7 @@ const PaymentsManagement: React.FC = () => {
       })
       
       if (response.success && response.data) {
-        setPayments(response.data.payments)
+        setPayments(response.data.payments || response.data.data || [])
         setTotalPages(response.data.pagination.pages)
       }
     } catch (error) {
@@ -194,9 +194,9 @@ const PaymentsManagement: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">
                             {payment.id.slice(0, 8)}...
                           </div>
-                          {payment.mpesaReceiptNumber && (
+                          {(payment.paymentReference || payment.mpesaReceiptNumber) && (
                             <div className="text-xs text-gray-500 mt-1">
-                              Receipt: {payment.mpesaReceiptNumber}
+                              Ref: {payment.paymentReference || payment.mpesaReceiptNumber}
                             </div>
                           )}
                         </div>
@@ -292,8 +292,8 @@ const PaymentsManagement: React.FC = () => {
                   <div className="mt-3 pt-3 border-t border-gray-100">
                     <div className="text-xs text-gray-500">
                       Transaction: {payment.id.slice(0, 8)}...
-                      {payment.mpesaReceiptNumber && (
-                        <span className="ml-2">Receipt: {payment.mpesaReceiptNumber}</span>
+                      {(payment.paymentReference || payment.mpesaReceiptNumber) && (
+                        <span className="ml-2">Ref: {payment.paymentReference || payment.mpesaReceiptNumber}</span>
                       )}
                     </div>
                   </div>

@@ -43,6 +43,7 @@ export interface Payment {
   userId: string
   planId: string
   amount: number
+  paymentReference?: string
   mpesaReceiptNumber?: string
   checkoutRequestId?: string
   status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
@@ -70,7 +71,10 @@ export interface ApiResponse<T> {
 }
 
 export interface PaginatedResponse<T> {
-  data: T[]
+  data?: T[]
+  payments?: T[]
+  sessions?: T[]
+  users?: T[]
   pagination: {
     page: number
     limit: number
@@ -80,9 +84,15 @@ export interface PaginatedResponse<T> {
 }
 
 export interface PaymentRequest {
-  phone: string
+  phone?: string
+  email?: string
   planId: string
   amount: number
+}
+
+export interface PaymentInitiateData {
+  reference: string
+  access_code: string
 }
 
 export interface PaymentStatusResponse {

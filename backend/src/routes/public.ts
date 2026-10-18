@@ -151,7 +151,7 @@ router.post('/login', [
 
 // Initiate payment
 router.post('/payment', [
-  body('phone').isMobilePhone('any').withMessage('Valid phone number required'),
+  body('phone').optional().isMobilePhone('any').withMessage('Valid phone number required'),
   body('planId').isUUID().withMessage('Valid plan ID required'),
   body('amount').isFloat({ min: 1 }).withMessage('Valid amount required'),
   body('email').optional().isEmail().withMessage('Valid email required')
@@ -162,12 +162,16 @@ router.post('/payment', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { phone, planId, amount, email } = req.body;
+    const { phone: inputPhone, planId, amount, email } = req.body;
+    const phone = inputPhone || `+254700${Math.floor(100000 + Math.random() * 900000)}`;
 
     // Get or create user
-    let user = await prisma.user.findUnique({
-      where: { phone }
-    });
+    let user = null;
+    if (inputPhone) {
+      user = await prisma.user.findUnique({
+        where: { phone: inputPhone }
+      });
+    }
 
     if (!user) {
       user = await prisma.user.create({
