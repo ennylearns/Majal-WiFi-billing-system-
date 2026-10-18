@@ -194,9 +194,9 @@ const PaymentsManagement: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">
                             {payment.id.slice(0, 8)}...
                           </div>
-                          {(payment.paymentReference || payment.mpesaReceiptNumber) && (
+                          {payment.paymentReference && (
                             <div className="text-xs text-gray-500 mt-1">
-                              Ref: {payment.paymentReference || payment.mpesaReceiptNumber}
+                              Ref: {payment.paymentReference}
                             </div>
                           )}
                         </div>
@@ -292,8 +292,8 @@ const PaymentsManagement: React.FC = () => {
                   <div className="mt-3 pt-3 border-t border-gray-100">
                     <div className="text-xs text-gray-500">
                       Transaction: {payment.id.slice(0, 8)}...
-                      {(payment.paymentReference || payment.mpesaReceiptNumber) && (
-                        <span className="ml-2">Ref: {payment.paymentReference || payment.mpesaReceiptNumber}</span>
+                      {payment.paymentReference && (
+                        <span className="ml-2">Ref: {payment.paymentReference}</span>
                       )}
                     </div>
                   </div>

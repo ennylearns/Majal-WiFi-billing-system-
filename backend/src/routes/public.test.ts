@@ -162,16 +162,6 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
     assert.equal(res.status, 200);
   });
 
-  test('POST /api/public/payment/mpesa/callback route is removed and returns 404', async () => {
-    const res = await fetch(`${baseUrl}/payment/mpesa/callback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    });
-
-    assert.equal(res.status, 404);
-  });
-
   test('GET /api/public/payment/status/:checkoutRequestId returns pending status for pending payment', async () => {
     const testRef = 'ref_pending_' + Date.now();
     const user = await prisma.user.create({

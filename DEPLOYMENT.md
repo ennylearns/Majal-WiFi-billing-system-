@@ -19,12 +19,10 @@ cp backend/.env.example backend/.env
 ### 2. Update Environment Variables
 Edit `backend/.env` with your actual credentials:
 ```env
-# M-Pesa Daraja API
-MPESA_CONSUMER_KEY="your-actual-consumer-key"
-MPESA_CONSUMER_SECRET="your-actual-consumer-secret"
-MPESA_SHORTCODE="your-shortcode"
-MPESA_PASSKEY="your-passkey"
-MPESA_CALLBACK_URL="https://yourdomain.com/api/public/payment/mpesa/callback"
+# Paystack API
+# Obtain test or live API keys from Paystack Dashboard -> Settings -> API Keys & Webhooks
+PAYSTACK_SECRET_KEY="your-paystack-secret-key"
+PAYSTACK_PUBLIC_KEY="your-paystack-public-key"
 
 # MikroTik Router
 MIKROTIK_HOST="192.168.1.1"
@@ -205,27 +203,31 @@ sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 /ip hotspot user profile add name=default rate-limit=1M/5M session-timeout=1h
 ```
 
-## 📱 M-Pesa Integration Setup
+## 📱 Paystack Integration Setup
 
-### 1. Daraja API Registration
-1. Visit [Daraja Portal](https://developer.safaricom.co.ke/)
-2. Create account and new app
-3. Get Consumer Key and Consumer Secret
-4. Generate Passkey for your shortcode
+### 1. Paystack Account & API Keys
+1. Create or log in to your account at [Paystack Dashboard](https://dashboard.paystack.com/)
+2. Navigate to **Settings → API Keys & Webhooks**
+3. Retrieve your **Secret Key** (`PAYSTACK_SECRET_KEY`) and **Public Key** (`PAYSTACK_PUBLIC_KEY`)
+4. Configure these values in `backend/.env`
 
-### 2. Callback URL Configuration
-- **Sandbox**: Use ngrok for testing
-- **Production**: Use your domain with HTTPS
+### 2. Webhook Registration
+> [!IMPORTANT]
+> You must register your webhook URL in the Paystack dashboard under **Settings → API Keys & Webhooks**.
+> Set the Webhook URL to: `https://yourdomain.com/api/public/payment/paystack/webhook`
 
-### 3. Testing
+- **Local/Development**: Use a tunneling tool like ngrok (`https://<subdomain>.ngrok-free.app/api/public/payment/paystack/webhook`)
+- **Production**: Use your domain with HTTPS (`https://yourdomain.com/api/public/payment/paystack/webhook`)
+
+### 3. Testing Payment Flow
 ```bash
-# Test STK Push
+# Initialize payment transaction
 curl -X POST https://yourdomain.com/api/public/payment \
   -H "Content-Type: application/json" \
   -d '{
-    "phone": "254712345678",
     "planId": "plan-id",
-    "amount": 100
+    "email": "customer@example.com",
+    "phone": "+254712345678"
   }'
 ```
 
@@ -284,10 +286,10 @@ pm2 restart collospot-backend
    - Verify DATABASE_URL in .env
    - Check database credentials
 
-3. **M-Pesa Payments Failing**
-   - Verify callback URL is accessible
-   - Check Daraja API credentials
-   - Review payment logs
+3. **Paystack Payments Failing**
+   - Verify `PAYSTACK_SECRET_KEY` and `PAYSTACK_PUBLIC_KEY` in `backend/.env`
+   - Verify webhook URL (`/api/public/payment/paystack/webhook`) is registered in Paystack dashboard
+   - Review backend logs for webhook signature verification errors
 
 4. **Router Connection Issues**
    - Test MikroTik API connectivity

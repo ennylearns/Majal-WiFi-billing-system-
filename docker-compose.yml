@@ -28,13 +28,9 @@ services:
       JWT_SECRET: "your-super-secret-jwt-key-change-in-production"
       NODE_ENV: "production"
       PORT: 5000
-      # Add your M-Pesa and other API credentials here
-      MPESA_CONSUMER_KEY: "your-mpesa-consumer-key"
-      MPESA_CONSUMER_SECRET: "your-mpesa-consumer-secret"
-      MPESA_SHORTCODE: "174379"
-      MPESA_PASSKEY: "your-mpesa-passkey"
-      MPESA_CALLBACK_URL: "https://yourdomain.com/api/public/payment/mpesa/callback"
-      MPESA_ENVIRONMENT: "sandbox"
+      # Add your Paystack and other API credentials here
+      PAYSTACK_SECRET_KEY: "your-paystack-secret-key"
+      PAYSTACK_PUBLIC_KEY: "your-paystack-public-key"
       MIKROTIK_HOST: "192.168.1.1"
       MIKROTIK_USERNAME: "admin"
       MIKROTIK_PASSWORD: "your-router-password"

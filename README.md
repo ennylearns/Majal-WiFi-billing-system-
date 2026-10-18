@@ -2,13 +2,13 @@
 
 **"Connect. Pay. Browse — Seamlessly."**
 
-This is a comprehensive WiFi billing system designed specifically for Kenya, featuring M-Pesa integration, MikroTik router control, and a modern web-based admin dashboard.
+This is a comprehensive WiFi billing system featuring Paystack payment integration (supporting card and bank transfer), MikroTik router control, and a modern web-based admin dashboard.
 
 ## 🌟 Features
 
 ### 🧍♂️ Customer Features
 - **Captive Portal**: Custom-branded login page with mobile-first design
-- **M-Pesa Integration**: STK Push and Paybill payments via Daraja API
+- **Paystack Integration**: Online payments supporting card and bank transfer channels
 - **Multiple Plans**: Time-based, data-based, and subscription packages
 - **Auto-Connect**: Automatic internet access after payment
 - **Real-time Status**: Connection status and usage monitoring
@@ -57,7 +57,7 @@ This is a comprehensive WiFi billing system designed specifically for Kenya, fea
 - Node.js 18+ and npm
 - PostgreSQL 14+
 - MikroTik router with API access
-- M-Pesa Daraja API credentials
+- Paystack API credentials (`PAYSTACK_SECRET_KEY` and `PAYSTACK_PUBLIC_KEY`)
 - Africa's Talking SMS API (optional)
 
 ### 1. Clone Repository
@@ -116,12 +116,9 @@ DATABASE_URL="postgresql://username:password@localhost:5432/collospot_db"
 # JWT
 JWT_SECRET="your-super-secret-jwt-key-here"
 
-# M-Pesa Daraja API
-MPESA_CONSUMER_KEY="your-mpesa-consumer-key"
-MPESA_CONSUMER_SECRET="your-mpesa-consumer-secret"
-MPESA_SHORTCODE="174379"
-MPESA_PASSKEY="your-mpesa-passkey"
-MPESA_CALLBACK_URL="https://yourdomain.com/api/payments/mpesa/callback"
+# Paystack API
+PAYSTACK_SECRET_KEY="your-paystack-secret-key"
+PAYSTACK_PUBLIC_KEY="your-paystack-public-key"
 
 # MikroTik Router
 MIKROTIK_HOST="192.168.1.1"
@@ -155,7 +152,8 @@ The system comes with pre-configured plans:
 - `GET /api/public/plans` - Get available plans
 - `POST /api/public/register` - Register new user
 - `POST /api/public/login` - User login
-- `POST /api/public/payment` - Initiate M-Pesa payment
+- `POST /api/public/payment` - Initialize Paystack transaction
+- `POST /api/public/payment/paystack/webhook` - Paystack webhook handler
 - `GET /api/public/payment/status/:id` - Check payment status
 - `POST /api/public/connect` - Connect to internet
 
@@ -173,7 +171,7 @@ The system uses Prisma ORM with the following main models:
 - **User**: Customer and admin accounts
 - **Plan**: Internet packages
 - **Session**: Active user connections
-- **Payment**: M-Pesa transactions
+- **Payment**: Paystack transactions
 - **Voucher**: Prepaid codes (optional)
 
 ### Responsive Breakpoints
@@ -209,7 +207,7 @@ docker-compose up -d
 2. Install Node.js, PostgreSQL, Nginx
 3. Configure SSL certificates
 4. Set up domain and DNS
-5. Configure M-Pesa callback URLs
+5. Configure Paystack webhook URL (`/api/public/payment/paystack/webhook`)
 
 ## 📱 Mobile App (Optional)
 
@@ -241,10 +239,10 @@ The system is designed to support a mobile app using the same API:
 
 ### Common Issues
 
-1. **M-Pesa payments failing**
-   - Check Daraja API credentials
-   - Verify callback URL is accessible
-   - Ensure phone number format is correct
+1. **Paystack payments failing**
+   - Check Paystack API keys (`PAYSTACK_SECRET_KEY` and `PAYSTACK_PUBLIC_KEY`)
+   - Verify webhook URL (`/api/public/payment/paystack/webhook`) is registered in Paystack dashboard
+   - Check backend logs for signature verification or transaction initialization errors
 
 2. **Router connection issues**
    - Verify MikroTik API is enabled

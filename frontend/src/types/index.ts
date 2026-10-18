@@ -44,7 +44,6 @@ export interface Payment {
   planId: string
   amount: number
   paymentReference?: string
-  mpesaReceiptNumber?: string
   checkoutRequestId?: string
   status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
   paymentMethod: string

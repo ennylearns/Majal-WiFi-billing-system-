@@ -12,12 +12,10 @@ const SettingsPage: React.FC = () => {
       supportPhone: '+254700000000',
       timezone: 'Africa/Nairobi'
     },
-    mpesa: {
-      consumerKey: '',
-      consumerSecret: '',
-      shortcode: '174379',
-      passkey: '',
-      environment: 'sandbox'
+    paystack: {
+      secretKey: '',
+      publicKey: '',
+      webhookUrl: '/api/public/payment/paystack/webhook'
     },
     router: {
       host: '192.168.1.1',
@@ -35,7 +33,7 @@ const SettingsPage: React.FC = () => {
 
   const tabs = [
     { id: 'general', name: 'General', icon: Settings },
-    { id: 'mpesa', name: 'M-Pesa', icon: DollarSign },
+    { id: 'paystack', name: 'Paystack', icon: DollarSign },
     { id: 'router', name: 'Router', icon: Wifi },
     { id: 'notifications', name: 'Notifications', icon: Bell },
     { id: 'security', name: 'Security', icon: Shield },
@@ -108,73 +106,51 @@ const SettingsPage: React.FC = () => {
     </div>
   )
 
-  const renderMpesaSettings = () => (
+  const renderPaystackSettings = () => (
     <div className="space-y-6">
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <p className="text-sm text-yellow-800">
-          <strong>Warning:</strong> These are sensitive credentials. Make sure to keep them secure.
+          <strong>Warning:</strong> These are sensitive API keys. Make sure to keep them secure.
         </p>
+      </div>
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+        <p className="font-semibold mb-1">Webhook Configuration</p>
+        <p>Register the webhook URL <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs">/api/public/payment/paystack/webhook</code> in your Paystack dashboard under <strong>Settings → API Keys &amp; Webhooks</strong>.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Consumer Key</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Secret Key</label>
           <input
             type="password"
-            value={settings.mpesa.consumerKey}
+            value={settings.paystack.secretKey}
             onChange={(e) => setSettings({
               ...settings,
-              mpesa: { ...settings.mpesa, consumerKey: e.target.value }
+              paystack: { ...settings.paystack, secretKey: e.target.value }
             })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Enter M-Pesa consumer key"
+            placeholder="sk_test_... or sk_live_..."
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Consumer Secret</label>
-          <input
-            type="password"
-            value={settings.mpesa.consumerSecret}
-            onChange={(e) => setSettings({
-              ...settings,
-              mpesa: { ...settings.mpesa, consumerSecret: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Enter M-Pesa consumer secret"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Shortcode</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Public Key</label>
           <input
             type="text"
-            value={settings.mpesa.shortcode}
+            value={settings.paystack.publicKey}
             onChange={(e) => setSettings({
               ...settings,
-              mpesa: { ...settings.mpesa, shortcode: e.target.value }
+              paystack: { ...settings.paystack, publicKey: e.target.value }
             })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="pk_test_... or pk_live_..."
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Environment</label>
-          <select
-            value={settings.mpesa.environment}
-            onChange={(e) => setSettings({
-              ...settings,
-              mpesa: { ...settings.mpesa, environment: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="sandbox">Sandbox</option>
-            <option value="production">Production</option>
-          </select>
         </div>
       </div>
       <button
-        onClick={() => handleSave('M-Pesa')}
+        onClick={() => handleSave('Paystack')}
         className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center"
       >
         <Save className="w-4 h-4 mr-2" />
-        Save M-Pesa Settings
+        Save Paystack Settings
       </button>
     </div>
   )
@@ -332,7 +308,7 @@ const SettingsPage: React.FC = () => {
 
         <div className="p-6">
           {activeTab === 'general' && renderGeneralSettings()}
-          {activeTab === 'mpesa' && renderMpesaSettings()}
+          {activeTab === 'paystack' && renderPaystackSettings()}
           {activeTab === 'router' && renderRouterSettings()}
           {activeTab === 'notifications' && renderNotificationSettings()}
           {activeTab === 'security' && (
