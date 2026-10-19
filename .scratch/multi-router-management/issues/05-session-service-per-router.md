@@ -4,12 +4,12 @@
 
 **Blocked by:** 01, 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `sessionService.createSession()` fetches the Router record via the plan's `routerId` and uses a per-router MikrotikService instance to create the hotspot user and profile
-- [ ] The created Session record has its `routerId` field populated
-- [ ] `sessionService.terminateSession()` reads `routerId` from the Session record and uses a per-router MikrotikService instance to remove the hotspot user
-- [ ] The session cleanup cron constructs per-router MikrotikService instances for each expired session independently
-- [ ] The module-level MikrotikService singleton is removed; no remaining imports reference it
-- [ ] Server starts and all session flows work end-to-end
-- [ ] All existing tests pass
+- [x] `sessionService.createSession()` fetches the Router record via the plan's `routerId` and uses a per-router MikrotikService instance to create the hotspot user and profile
+- [x] The created Session record has its `routerId` field populated
+- [x] `sessionService.terminateSession()` reads `routerId` from the Session record and uses a per-router MikrotikService instance to remove the hotspot user
+- [x] The session cleanup cron constructs per-router MikrotikService instances for each expired session independently
+- [x] The module-level MikrotikService singleton is removed; no remaining imports reference it
+- [x] Server starts and all session flows work end-to-end
+- [x] All existing tests pass
