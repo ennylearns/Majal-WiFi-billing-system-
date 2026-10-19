@@ -26,6 +26,23 @@ model User {
   @@map("users")
 }
 
+model Router {
+  id          String   @id @default(uuid())
+  name        String
+  location    String
+  host        String
+  port        Int      @default(8728)
+  username    String
+  password    String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plans       Plan[]
+
+  @@map("routers")
+}
+
 model Plan {
   id          String   @id @default(uuid())
   name        String
@@ -38,6 +55,9 @@ model Plan {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  routerId    String?
+  router      Router?  @relation(fields: [routerId], references: [id])
+
   sessions    Session[]
   payments    Payment[]
   
@@ -48,6 +68,7 @@ model Session {
   id              String        @id @default(uuid())
   userId          String
   planId          String
+  routerId        String?
   macAddress      String?
   ipAddress       String?
   startTime       DateTime      @default(now())
