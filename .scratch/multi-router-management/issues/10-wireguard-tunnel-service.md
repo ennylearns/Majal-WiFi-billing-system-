@@ -4,13 +4,13 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Create `backend/src/services/wireguardService.ts` with singleton export `wireguardService`
-- [ ] Implement keypair generation using `crypto` or standard WireGuard base64 curve25519 routines
-- [ ] Implement tunnel IP address pool allocation within `10.250.0.0/24` (allocating next available IP, reserving `.1` for Majal server)
-- [ ] Implement `addPeer(publicKey: string, tunnelIp: string): Promise<void>` executing `wg set <interface> peer <key> allowed-ips <tunnelIp>/32` with graceful fallback if `wg` CLI is missing
-- [ ] Implement `removePeer(publicKey: string): Promise<void>` executing `wg set <interface> peer <key> remove` with graceful fallback
-- [ ] Implement `getPeerHandshake(publicKey: string): Promise<{ isConnected: boolean; lastHandshakeTime: Date | null }>` checking peer handshake within last 3 minutes
-- [ ] Read server WireGuard configuration from environment variables (`WIREGUARD_INTERFACE`, `WIREGUARD_SERVER_ENDPOINT`, `WIREGUARD_SERVER_PUBLIC_KEY`, `WIREGUARD_SUBNET`)
-- [ ] Add comprehensive unit tests in `backend/src/services/wireguardService.test.ts` covering key generation, IP allocation, command execution, and mock fallbacks
+- [x] Create `backend/src/services/wireguardService.ts` with singleton export `wireguardService`
+- [x] Implement keypair generation using `crypto` or standard WireGuard base64 curve25519 routines
+- [x] Implement tunnel IP address pool allocation within `10.250.0.0/24` (allocating next available IP, reserving `.1` for Majal server)
+- [x] Implement `addPeer(publicKey: string, tunnelIp: string): Promise<void>` executing `wg set <interface> peer <key> allowed-ips <tunnelIp>/32` with graceful fallback if `wg` CLI is missing
+- [x] Implement `removePeer(publicKey: string): Promise<void>` executing `wg set <interface> peer <key> remove` with graceful fallback
+- [x] Implement `getPeerHandshake(publicKey: string): Promise<{ isConnected: boolean; lastHandshakeTime: Date | null }>` checking peer handshake within last 3 minutes
+- [x] Read server WireGuard configuration from environment variables (`WIREGUARD_INTERFACE`, `WIREGUARD_SERVER_ENDPOINT`, `WIREGUARD_SERVER_PUBLIC_KEY`, `WIREGUARD_SUBNET`)
+- [x] Add comprehensive unit tests in `backend/src/services/wireguardService.test.ts` covering key generation, IP allocation, command execution, and mock fallbacks
