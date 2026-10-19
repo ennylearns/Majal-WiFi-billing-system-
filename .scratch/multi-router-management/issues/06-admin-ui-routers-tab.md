@@ -4,14 +4,14 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] "Routers" tab appears in the admin dashboard navigation alongside existing tabs
-- [ ] Routers table displays name, location, host, port, and active status for each router
-- [ ] "Add Router" button opens a modal with fields for name, location, host, port, username, and password
-- [ ] Submitting the add modal calls the create API and refreshes the table on success
-- [ ] Each table row has an Edit button that opens the modal pre-filled with the router's current values
-- [ ] Submitting the edit modal calls the update API and refreshes the table on success
-- [ ] Each table row has a Delete button that prompts for confirmation then calls the delete API
-- [ ] Each table row has a "Test Connection" button that calls the test-connection API and shows a clear success or failure message inline
-- [ ] Loading, error, and empty states are handled gracefully throughout
+- [x] "Routers" tab appears in the admin dashboard navigation alongside existing tabs
+- [x] Routers table displays name, location, host, port, and active status for each router
+- [x] "Add Router" button opens a modal with fields for name, location, host, port, username, and password
+- [x] Submitting the add modal calls the create API and refreshes the table on success
+- [x] Each table row has an Edit button that opens the modal pre-filled with the router's current values
+- [x] Submitting the edit modal calls the update API and refreshes the table on success
+- [x] Each table row has a Delete button that prompts for confirmation then calls the delete API
+- [x] Each table row has a "Test Connection" button that calls the test-connection API and shows a clear success or failure message inline
+- [x] Loading, error, and empty states are handled gracefully throughout

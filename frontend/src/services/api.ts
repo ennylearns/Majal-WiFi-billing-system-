@@ -10,7 +10,8 @@ import type {
   Session,
   Payment,
   PaginatedResponse,
-  PaymentInitiateData
+  PaymentInitiateData,
+  Router
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -134,7 +135,23 @@ export const adminAPI = {
   }): Promise<ApiResponse<PaginatedResponse<Payment>>> =>
     privateApi.get('/admin/payments', { params }).then(res => res.data),
 
-  // Router
+  // Routers
+  getRouters: (): Promise<ApiResponse<Router[]>> =>
+    privateApi.get('/admin/routers').then(res => res.data),
+
+  createRouter: (data: Omit<Router, 'id' | 'createdAt' | 'updatedAt' | 'password'> & { password: string }): Promise<ApiResponse<Router>> =>
+    privateApi.post('/admin/routers', data).then(res => res.data),
+
+  updateRouter: (id: string, data: Partial<Omit<Router, 'id' | 'createdAt' | 'updatedAt'>>): Promise<ApiResponse<Router>> =>
+    privateApi.put(`/admin/routers/${id}`, data).then(res => res.data),
+
+  deleteRouter: (id: string): Promise<ApiResponse<{ message: string }>> =>
+    privateApi.delete(`/admin/routers/${id}`).then(res => res.data),
+
+  testRouterConnection: (id: string): Promise<ApiResponse<{ message?: string }>> =>
+    privateApi.post(`/admin/routers/${id}/test-connection`).then(res => res.data),
+
+  // Legacy single-router status
   getRouterStatus: (): Promise<ApiResponse<{ activeUsers: number; users: any[] }>> =>
     privateApi.get('/admin/router/status').then(res => res.data),
 }

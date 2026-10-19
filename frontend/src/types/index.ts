@@ -103,3 +103,16 @@ export interface PaymentStatusResponse {
 export interface ConnectionRequest {
   sessionToken: string
 }
+
+export interface Router {
+  id: string
+  name: string
+  location: string
+  host: string
+  port: number
+  username: string
+  password?: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}

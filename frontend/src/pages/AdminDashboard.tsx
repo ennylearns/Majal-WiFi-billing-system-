@@ -14,7 +14,8 @@ import {
   TrendingUp,
   Bell,
   Search,
-  RefreshCw
+  RefreshCw,
+  Router as RouterIcon
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { adminAPI } from '../services/api'
@@ -22,13 +23,13 @@ import { formatCurrency } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import type { DashboardStats } from '../types'
 
-// Dashboard components
 import DashboardOverview from '../components/DashboardOverview'
 import UsersManagement from '../components/UsersManagement'
 import PlansManagement from '../components/PlansManagement'
 import SessionsManagement from '../components/SessionsManagement'
 import PaymentsManagement from '../components/PaymentsManagement'
 import SettingsPage from '../components/SettingsPage'
+import RoutersManagement from '../components/RoutersManagement'
 
 const AdminDashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -64,6 +65,7 @@ const AdminDashboard: React.FC = () => {
     { name: 'Plans', href: '/admin/plans', icon: CreditCard },
     { name: 'Sessions', href: '/admin/sessions', icon: Wifi },
     { name: 'Payments', href: '/admin/payments', icon: DollarSign },
+    { name: 'Routers', href: '/admin/routers', icon: RouterIcon },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ]
 
@@ -236,6 +238,7 @@ const AdminDashboard: React.FC = () => {
               <Route path="/plans" element={<PlansManagement />} />
               <Route path="/sessions" element={<SessionsManagement />} />
               <Route path="/payments" element={<PaymentsManagement />} />
+              <Route path="/routers" element={<RoutersManagement />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </div>
