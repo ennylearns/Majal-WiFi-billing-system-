@@ -118,6 +118,13 @@ router.get('/plans', async (req: AuthRequest, res: Response) => {
     const plans = await prisma.plan.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
+        router: {
+          select: {
+            id: true,
+            name: true,
+            location: true
+          }
+        },
         _count: {
           select: {
             sessions: true,
@@ -139,7 +146,8 @@ router.post('/plans', [
   body('price').isFloat({ min: 0 }).withMessage('Valid price required'),
   body('duration').isInt({ min: 1 }).withMessage('Valid duration required'),
   body('dataLimit').notEmpty().withMessage('Data limit required'),
-  body('speedLimit').notEmpty().withMessage('Speed limit required')
+  body('speedLimit').notEmpty().withMessage('Speed limit required'),
+  body('routerId').notEmpty().withMessage('Router ID required')
 ], async (req: AuthRequest, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -147,7 +155,15 @@ router.post('/plans', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { name, description, price, duration, dataLimit, speedLimit } = req.body;
+    const { name, description, price, duration, dataLimit, speedLimit, routerId } = req.body;
+
+    const router = await prisma.router.findUnique({
+      where: { id: routerId }
+    });
+
+    if (!router) {
+      return res.status(400).json({ success: false, error: 'Router not found' });
+    }
 
     const plan = await prisma.plan.create({
       data: {
@@ -156,7 +172,8 @@ router.post('/plans', [
         price,
         duration,
         dataLimit,
-        speedLimit
+        speedLimit,
+        routerId
       }
     });
 
@@ -170,11 +187,35 @@ router.post('/plans', [
 router.put('/plans/:id', [
   body('name').optional().notEmpty(),
   body('price').optional().isFloat({ min: 0 }),
-  body('duration').optional().isInt({ min: 1 })
+  body('duration').optional().isInt({ min: 1 }),
+  body('routerId').optional().notEmpty().withMessage('Router ID cannot be empty')
 ], async (req: AuthRequest, res: Response) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
     const { id } = req.params;
     const updates = req.body;
+
+    const existingPlan = await prisma.plan.findUnique({
+      where: { id }
+    });
+
+    if (!existingPlan) {
+      return res.status(404).json({ success: false, error: 'Plan not found' });
+    }
+
+    if (updates.routerId !== undefined) {
+      const router = await prisma.router.findUnique({
+        where: { id: updates.routerId }
+      });
+
+      if (!router) {
+        return res.status(400).json({ success: false, error: 'Router not found' });
+      }
+    }
 
     const plan = await prisma.plan.update({
       where: { id },

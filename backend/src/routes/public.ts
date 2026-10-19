@@ -15,7 +15,16 @@ router.get('/plans', async (req: Request, res: Response) => {
   try {
     const plans = await prisma.plan.findMany({
       where: { isActive: true },
-      orderBy: { price: 'asc' }
+      orderBy: { price: 'asc' },
+      include: {
+        router: {
+          select: {
+            id: true,
+            name: true,
+            location: true
+          }
+        }
+      }
     });
     
     res.json({ success: true, data: plans });

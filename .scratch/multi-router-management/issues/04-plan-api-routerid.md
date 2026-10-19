@@ -4,11 +4,11 @@
 
 **Blocked by:** 02, 03
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Admin `POST /api/admin/plans` accepts and validates `routerId`; rejects requests where `routerId` is missing or does not reference an existing router
-- [ ] Admin `PUT /api/admin/plans/:id` accepts and validates `routerId` updates
-- [ ] Public `GET /api/public/plans` response includes `routerId`, router `name`, and router `location` for each plan
-- [ ] Admin `GET /api/admin/plans` response includes router name for each plan
-- [ ] Integration tests cover plan creation with valid and invalid `routerId`
-- [ ] All existing plan-related tests still pass
+- [x] Admin `POST /api/admin/plans` accepts and validates `routerId`; rejects requests where `routerId` is missing or does not reference an existing router
+- [x] Admin `PUT /api/admin/plans/:id` accepts and validates `routerId` updates
+- [x] Public `GET /api/public/plans` response includes `routerId`, router `name`, and router `location` for each plan
+- [x] Admin `GET /api/admin/plans` response includes router name for each plan
+- [x] Integration tests cover plan creation with valid and invalid `routerId`
+- [x] All existing plan-related tests still pass

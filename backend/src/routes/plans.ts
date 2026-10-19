@@ -9,7 +9,16 @@ router.get('/', async (req, res) => {
   try {
     const plans = await prisma.plan.findMany({
       where: { isActive: true },
-      orderBy: { price: 'asc' }
+      orderBy: { price: 'asc' },
+      include: {
+        router: {
+          select: {
+            id: true,
+            name: true,
+            location: true
+          }
+        }
+      }
     });
     
     res.json({ success: true, data: plans });
@@ -24,7 +33,16 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
     
     const plan = await prisma.plan.findUnique({
-      where: { id, isActive: true }
+      where: { id, isActive: true },
+      include: {
+        router: {
+          select: {
+            id: true,
+            name: true,
+            location: true
+          }
+        }
+      }
     });
     
     if (!plan) {
