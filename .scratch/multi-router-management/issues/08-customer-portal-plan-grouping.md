@@ -1,14 +1,17 @@
-# 08: Customer portal: group plans by router location
+# 08: Customer portal: location-specific plans
 
-**What to build:** Update the customer-facing plans page so that plans are displayed grouped under their router's name and location as a section heading, rather than a flat undifferentiated list. A customer at a specific physical location can immediately see which plans are available there. The full purchase flow — select a plan, pay, connect — must continue to work correctly end-to-end, with the resulting session on the router that the chosen plan belongs to.
+**What to build:** Update the customer-facing portal so that when a user connects to a router hotspot, they only see plans available for that specific location (detected via URL query parameter `?routerId=...` or `?router=...`). The header displays the active location with an option to change location. If no router parameter is present or if the parameter does not match any active router, the portal displays a location selector dropdown allowing the user to choose their location. The full purchase flow â€” select a plan, pay, connect â€” must continue to work correctly end-to-end, with the resulting session created on the router that the chosen plan belongs to.
 
 **Blocked by:** 04
 
 **Status:** ready-for-agent
 
-- [ ] Customer portal plans list renders plans grouped by router location (one section heading per router)
-- [ ] Each section heading shows the router name and/or location description
-- [ ] Plans within each group display correctly (name, price, duration, data, speed)
-- [ ] If only one router exists, plans still render correctly (single group, no regression)
+- [ ] Customer portal detects router identifier from URL query parameter (`routerId` or `router`)
+- [ ] Only plans assigned to the detected router location are displayed
+- [ ] Header/banner displays current connected location (e.g., "Connected at: <location>") with an option to change location
+- [ ] When URL parameter is missing or unrecognized, a location selector dropdown is displayed to let the user choose their location
+- [ ] When an unrecognized router parameter is passed, a warning notice is shown prompting the user to select their location
+- [ ] Selecting a location from the dropdown filters the displayed plans to that location
+- [ ] Plans display correctly (name, price, duration, data, speed)
+- [ ] Empty state (no plans available for the selected location) is handled gracefully with an option to change location
 - [ ] Selecting a plan and completing the full purchase + connect flow works end-to-end
-- [ ] Empty state (no plans available) is handled gracefully

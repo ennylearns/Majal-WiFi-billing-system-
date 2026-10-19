@@ -8,7 +8,7 @@ The system is hardwired to a single MikroTik router via environment variables. A
 
 ## Solution
 
-Introduce a **Router** entity that admins manage through the admin dashboard. Each Plan is assigned to exactly one Router. When a customer purchases a Plan, their hotspot user is created on that Plan's Router. The customer portal groups Plans by Router location so customers can see what is available at their location. A one-time seed migrates the existing env-var router config into the database on first start so no manual re-entry is needed.
+Introduce a **Router** entity that admins manage through the admin dashboard. Each Plan is assigned to exactly one Router. When a customer purchases a Plan, their hotspot user is created on that Plan's Router. When a customer connects to a router hotspot, the customer portal detects the router and displays only the plans available for that specific location (with a fallback location selector). A one-time seed migrates the existing env-var router config into the database on first start so no manual re-entry is needed.
 
 ## User Stories
 
@@ -24,14 +24,14 @@ Introduce a **Router** entity that admins manage through the admin dashboard. Ea
 10. As an admin, I want to see which router a plan belongs to in the plans list, so that I can audit the plan-to-router mapping at a glance.
 11. As an admin, I want the dashboard router status view to show active hotspot users per router, so that I can monitor all routers from one place.
 12. As an admin, I want the existing env-var router configuration to be automatically migrated to the database on first start, so that I do not need to re-enter credentials after upgrading.
-13. As a customer, I want to see all available plans grouped by router location, so that I can choose a plan for the location I am physically at.
+13. As a customer connecting to a router's hotspot, I want to see only the plans available for that specific location, so that I don't buy an invalid plan for my area.
 14. As a customer, I want my hotspot credentials to be created on the correct router when I complete a payment, so that I can actually connect to the internet at my location.
 15. As a customer, I want my session to be terminated on the correct router when my plan expires, so that my credentials are properly cleaned up.
 16. As an admin, I want terminated and expired sessions to be cleaned up on the correct router, so that unused hotspot users do not accumulate on any device.
 
 ## Implementation Decisions
 
-- **Router model**: A new `Router` entity is introduced to the database schema with the following fields: unique ID, `name` (friendly label), `location` (human-readable description of physical placement), `host` (IP or hostname), `port` (integer, defaults to 8728), `username`, `password` (stored in plain text — acceptable for internal admin use), `isActive` flag, and timestamps. Router credentials are stored in plain text in the database.
+- **Router model**: A new `Router` entity is introduced to the database schema with the following fields: unique ID, `name` (friendly label), `location` (human-readable description of physical placement), `host` (IP or hostname), `port` (integer, defaults to 8728), `username`, `password` (stored in plain text â€” acceptable for internal admin use), `isActive` flag, and timestamps. Router credentials are stored in plain text in the database.
 
 - **Plan-Router association**: The `Plan` entity gains a `routerId` foreign key referencing `Router`. This is a required field going forward. During the migration seed, existing plans are updated to reference the seeded default router.
 
@@ -46,31 +46,35 @@ Introduce a **Router** entity that admins manage through the admin dashboard. Ea
 - **Session cleanup cron**: The periodic cleanup job resolves each expired session's router via the session's stored `routerId` before terminating, so every router is cleaned up independently.
 
 - **Admin router API**: New endpoints under `/api/admin/routers`:
-  - `GET /` — list all routers
-  - `POST /` — create a router
-  - `PUT /:id` — update a router
-  - `DELETE /:id` — delete a router (soft delete via `isActive = false`, or hard delete if no sessions reference it)
-  - `POST /:id/test-connection` — attempt to connect to the router and return success/failure
+  - `GET /` â€” list all routers
+  - `POST /` â€” create a router
+  - `PUT /:id` â€” update a router
+  - `DELETE /:id` â€” delete a router (soft delete via `isActive = false`, or hard delete if no sessions reference it)
+  - `POST /:id/test-connection` â€” attempt to connect to the router and return success/failure
 
 - **Plans API update**: The plan create and update endpoints accept and return `routerId`. The public plans endpoint returns `routerId` and the router's `name`/`location` so the frontend can group plans without a separate request.
 
 - **Migration seed**: On server startup, if `MIKROTIK_HOST` is present in the environment and no Router records exist in the database, one Router record is created from the env-var values. Its name defaults to `"Default Router"` and location to `"Main Location"`. All existing Plans are updated to reference this seeded router. Env vars remain supported as a seed source but are no longer the live connection config once any router exists in the DB.
 
-- **Admin UI — Routers tab**: A new "Routers" section is added to the admin dashboard. It displays a table of routers with columns for name, location, host, status, and actions (edit, delete, test connection). A modal handles add and edit operations.
+- **Admin UI â€” Routers tab**: A new "Routers" section is added to the admin dashboard. It displays a table of routers with columns for name, location, host, status, and actions (edit, delete, test connection). A modal handles add and edit operations.
 
-- **Admin UI — Plans form update**: The plan create/edit modal gains a "Router" dropdown populated from the routers API. The plans table gains a "Router" column showing the router name.
+- **Admin UI â€” Plans form update**: The plan create/edit modal gains a "Router" dropdown populated from the routers API. The plans table gains a "Router" column showing the router name.
 
-- **Customer portal — plan grouping**: The plans list on the customer portal renders plans grouped under their router's name/location as a section heading, instead of a flat list.
+- **Customer portal â€” plan grouping**: The plans list on the customer portal renders plans grouped under their router's name/location as a section heading, instead of a flat list.
+
+- **WireGuard CGNAT traversal**: Routers operating behind CGNAT do not possess public IP addresses. To enable backend communication, each router is linked via a WireGuard reverse tunnel. The Majal server hosts a WireGuard interface (`wg0`). On router creation, backend auto-generates WireGuard keypairs, allocates a dedicated internal tunnel IP (`10.250.0.X`), and registers the peer. When a router is deleted, the WireGuard peer is automatically removed and its IP released.
+
+- **Automated RouterOS provisioning script**: Admin UI provides a "Setup Script" modal that displays an idempotent RouterOS v7 script (`GET /api/admin/routers/:id/provision-script`). The script configures: system identity, WireGuard client interface (`persistent-keepalive=25s`), API service restricted to `10.250.0.1/32`, dedicated `billing-api` user, walled garden entries (portal domain, Paystack), and captive portal `hotspot/login.html` redirecting to `https://<PORTAL_DOMAIN>/?routerId=<ID>&router=$(identity)`.
 
 ## Testing Decisions
 
-- **What makes a good test**: Tests assert only observable external behaviour — API response shapes, database state after a call, or MikroTik API commands issued — not internal wiring or call order. Tests should not reach into private methods or assert that a specific import was used.
+- **What makes a good test**: Tests assert only observable external behaviour â€” API response shapes, database state after a call, or MikroTik API commands issued â€” not internal wiring or call order. Tests should not reach into private methods or assert that a specific import was used.
 
 - **MikrotikService unit tests**: Instantiate the refactored class with explicit stub credentials. Mock `RouterOSAPI` from `node-routeros` at the module boundary. Assert that the correct API commands and arguments are written for each public method (`createHotspotUser`, `removeHotspotUser`, `getActiveUsers`, `disconnectUser`, `createUserProfile`, `updateUserProfile`). Prior art: `paystackService.test.ts` shows the pattern of mocking an external SDK and asserting method calls.
 
 - **Admin router API integration tests**: Drive the full HTTP stack (Express app + Prisma against a test database). Assert correct response bodies and status codes for all CRUD operations and the test-connection endpoint. Prior art: `public.test.ts` shows the pattern of mounting the Express app and making HTTP requests in tests.
 
-- **No separate tests for session routing logic**: The correct-router behaviour is covered transitively by the session creation and termination paths already exercised in integration tests — no additional seam is needed.
+- **No separate tests for session routing logic**: The correct-router behaviour is covered transitively by the session creation and termination paths already exercised in integration tests â€” no additional seam is needed.
 
 ## Out of Scope
 
