@@ -1,18 +1,38 @@
 import { PrismaClient } from '@prisma/client';
-import mikrotikService from './mikrotikService';
+import { MikrotikService } from './mikrotikService';
 import smsService from './smsService';
 
 const prisma = new PrismaClient();
+
+/** Build a MikrotikService from a Router DB record. */
+function mikrotikServiceForRouter(router: {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}): MikrotikService {
+  return new MikrotikService({
+    host: router.host,
+    port: router.port,
+    username: router.username,
+    password: router.password,
+  });
+}
 
 export class SessionService {
   async createSession(userId: string, planId: string, sessionToken: string): Promise<any> {
     try {
       const plan = await prisma.plan.findUnique({
-        where: { id: planId }
+        where: { id: planId },
+        include: { router: true },
       });
 
       if (!plan) {
         throw new Error('Plan not found');
+      }
+
+      if (!plan.router) {
+        throw new Error(`Plan ${planId} has no router assigned`);
       }
 
       const endTime = new Date();
@@ -22,37 +42,30 @@ export class SessionService {
         data: {
           userId,
           planId,
+          routerId: plan.router.id,
           sessionToken,
           endTime,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
         },
         include: {
           user: true,
-          plan: true
-        }
+          plan: true,
+        },
       });
 
-      // Create MikroTik user profile based on plan
+      // Create MikroTik user profile and hotspot user on the plan's router
+      const mikrotik = mikrotikServiceForRouter(plan.router);
       const profileName = `plan_${plan.id}`;
       const speedLimit = this.parseSpeedLimit(plan.speedLimit);
-      const sessionTimeout = mikrotikService.formatSessionTimeout(plan.duration);
+      const sessionTimeout = mikrotik.formatSessionTimeout(plan.duration);
 
       try {
-        await mikrotikService.createUserProfile(
-          profileName,
-          speedLimit,
-          sessionTimeout
-        );
+        await mikrotik.createUserProfile(profileName, speedLimit, sessionTimeout);
       } catch (error) {
         console.log('Profile might already exist, continuing...');
       }
 
-      // Create hotspot user
-      await mikrotikService.createHotspotUser(
-        sessionToken,
-        sessionToken,
-        profileName
-      );
+      await mikrotik.createHotspotUser(sessionToken, sessionToken, profileName);
 
       return session;
     } catch (error) {
@@ -65,11 +78,28 @@ export class SessionService {
     try {
       const session = await prisma.session.findUnique({
         where: { id: sessionId },
-        include: { user: true }
+        include: {
+          user: true,
+          plan: {
+            include: { router: true },
+          },
+        },
       });
 
       if (!session) {
         throw new Error('Session not found');
+      }
+
+      // Resolve the router to use: prefer routerId stored on session,
+      // fall back to the plan's current router (handles legacy rows).
+      let router: { host: string; port: number; username: string; password: string } | null = null;
+
+      if (session.routerId) {
+        router = await prisma.router.findUnique({ where: { id: session.routerId } });
+      }
+
+      if (!router && session.plan?.router) {
+        router = session.plan.router;
       }
 
       // Update session status
@@ -77,12 +107,16 @@ export class SessionService {
         where: { id: sessionId },
         data: {
           status: 'TERMINATED',
-          endTime: new Date()
-        }
+          endTime: new Date(),
+        },
       });
 
-      // Remove from MikroTik
-      await mikrotikService.removeHotspotUser(session.sessionToken);
+      if (router) {
+        const mikrotik = mikrotikServiceForRouter(router);
+        await mikrotik.removeHotspotUser(session.sessionToken);
+      } else {
+        console.warn(`Session ${sessionId} has no router reference; skipping MikroTik cleanup`);
+      }
 
       console.log(`✅ Session terminated: ${sessionId}`);
     } catch (error) {
@@ -97,8 +131,8 @@ export class SessionService {
         where: { sessionToken },
         include: {
           user: true,
-          plan: true
-        }
+          plan: true,
+        },
       });
 
       if (!session || session.status !== 'ACTIVE') {
@@ -125,15 +159,15 @@ export class SessionService {
           userId,
           status: 'ACTIVE',
           endTime: {
-            gt: new Date()
-          }
+            gt: new Date(),
+          },
         },
         include: {
-          plan: true
+          plan: true,
         },
         orderBy: {
-          startTime: 'desc'
-        }
+          startTime: 'desc',
+        },
       });
     } catch (error) {
       console.error('Error getting user sessions:', error);
@@ -145,7 +179,7 @@ export class SessionService {
     try {
       await prisma.session.update({
         where: { sessionToken },
-        data: { dataUsed }
+        data: { dataUsed },
       });
     } catch (error) {
       console.error('Error updating session usage:', error);
@@ -160,24 +194,24 @@ export class SessionService {
   }
 }
 
-// Cleanup expired sessions
+// Cleanup expired sessions - each session uses its own per-router MikrotikService
 export const sessionCleanup = async (): Promise<void> => {
   try {
     const expiredSessions = await prisma.session.findMany({
       where: {
         status: 'ACTIVE',
         endTime: {
-          lt: new Date()
-        }
-      }
+          lt: new Date(),
+        },
+      },
     });
 
     for (const session of expiredSessions) {
       await new SessionService().terminateSession(session.id);
-      
+
       // Send expiry notification
       const user = await prisma.user.findUnique({
-        where: { id: session.userId }
+        where: { id: session.userId },
       });
 
       if (user) {
