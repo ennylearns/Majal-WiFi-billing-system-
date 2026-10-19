@@ -20,6 +20,18 @@ export interface Plan {
   isActive: boolean
   createdAt: string
   updatedAt: string
+  routerId?: string
+  router?: {
+    id: string
+    name: string
+    location: string
+  }
+}
+
+export interface PublicRouter {
+  id: string
+  name: string
+  location: string
 }
 
 export interface Session {

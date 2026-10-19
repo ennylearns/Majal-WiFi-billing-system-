@@ -10,11 +10,56 @@ import smsService from '../services/smsService';
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Get all active plans
+// Get all active routers (public location info only)
+router.get('/routers', async (req: Request, res: Response) => {
+  try {
+    const routers = await prisma.router.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        location: true
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    res.json({ success: true, data: routers });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch routers' });
+  }
+});
+
+// Get all active plans (optionally filtered by routerId or router name/location)
 router.get('/plans', async (req: Request, res: Response) => {
   try {
+    const { routerId, router: routerQuery } = req.query;
+
+    const where: any = { isActive: true };
+
+    if (typeof routerId === 'string' && routerId.trim() !== '') {
+      where.routerId = routerId.trim();
+    } else if (typeof routerQuery === 'string' && routerQuery.trim() !== '') {
+      const q = routerQuery.trim().toLowerCase();
+      const activeRouters = await prisma.router.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, location: true }
+      });
+
+      const matched = activeRouters.filter(r =>
+        r.id.toLowerCase() === q ||
+        r.name.toLowerCase() === q ||
+        r.location.toLowerCase() === q
+      );
+
+      if (matched.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+
+      where.routerId = { in: matched.map(r => r.id) };
+    }
+
     const plans = await prisma.plan.findMany({
-      where: { isActive: true },
+      where,
       orderBy: { price: 'asc' },
       include: {
         router: {

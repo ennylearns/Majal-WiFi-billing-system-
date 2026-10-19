@@ -11,7 +11,8 @@ import type {
   Payment,
   PaginatedResponse,
   PaymentInitiateData,
-  Router
+  Router,
+  PublicRouter
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -51,9 +52,13 @@ privateApi.interceptors.response.use(
 
 // Public API (Customer Portal)
 export const publicAPI = {
+  // Routers
+  getRouters: (): Promise<ApiResponse<PublicRouter[]>> =>
+    publicApi.get('/public/routers').then(res => res.data),
+
   // Plans
-  getPlans: (): Promise<ApiResponse<Plan[]>> =>
-    publicApi.get('/public/plans').then(res => res.data),
+  getPlans: (params?: { routerId?: string; router?: string }): Promise<ApiResponse<Plan[]>> =>
+    publicApi.get('/public/plans', { params }).then(res => res.data),
 
   // User registration/login
   register: (data: {

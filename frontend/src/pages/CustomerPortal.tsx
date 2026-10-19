@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Wifi, Check, Clock, Zap, CreditCard, Download, AlertCircle } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Wifi, Check, Clock, Zap, CreditCard, Download, AlertCircle, MapPin, AlertTriangle } from 'lucide-react'
 import { formatCurrency, formatDuration } from '../utils/formatters'
 import { publicAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import type { Plan } from '../types'
+import type { Plan, PublicRouter } from '../types'
 
 interface ConnectedSessionInfo {
   plan: string
@@ -11,6 +12,13 @@ interface ConnectedSessionInfo {
 }
 
 const CustomerPortal: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [routers, setRouters] = useState<PublicRouter[]>([])
+  const [selectedRouter, setSelectedRouter] = useState<PublicRouter | null>(null)
+  const [isChangingLocation, setIsChangingLocation] = useState(false)
+  const [unrecognizedParam, setUnrecognizedParam] = useState<string | null>(null)
+  const [loadingData, setLoadingData] = useState(true)
+
   const [plans, setPlans] = useState<Plan[]>([])
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [showPayment, setShowPayment] = useState(false)
@@ -20,18 +28,76 @@ const CustomerPortal: React.FC = () => {
   const [connectedSession, setConnectedSession] = useState<ConnectedSessionInfo | null>(null)
   const isPaymentConfirmedRef = useRef(false)
 
-  useEffect(() => {
-    fetchPlans()
-  }, [])
+  const rawRouterParam = searchParams.get('routerId') || searchParams.get('router')
 
-  const fetchPlans = async () => {
+  useEffect(() => {
+    loadPortalData()
+  }, [rawRouterParam])
+
+  const loadPortalData = async () => {
     try {
-      const response = await publicAPI.getPlans()
-      if (response.success && response.data) {
-        setPlans(response.data)
+      setLoadingData(true)
+      const [routersRes, plansRes] = await Promise.all([
+        publicAPI.getRouters().catch(() => ({ success: false, data: [] })),
+        publicAPI.getPlans().catch(() => ({ success: false, data: [] }))
+      ])
+
+      const loadedPlans: Plan[] = plansRes.success && plansRes.data ? plansRes.data : []
+      setPlans(loadedPlans)
+
+      let loadedRouters: PublicRouter[] = routersRes.success && routersRes.data ? routersRes.data : []
+      if (loadedRouters.length === 0) {
+        // Fallback: extract unique routers from plans
+        const map = new Map<string, PublicRouter>()
+        for (const p of loadedPlans) {
+          if (p.router) {
+            map.set(p.router.id, {
+              id: p.router.id,
+              name: p.router.name,
+              location: p.router.location
+            })
+          }
+        }
+        loadedRouters = Array.from(map.values())
+      }
+      setRouters(loadedRouters)
+
+      if (rawRouterParam && rawRouterParam.trim() !== '') {
+        const q = rawRouterParam.trim().toLowerCase()
+        const match = loadedRouters.find(r =>
+          r.id.toLowerCase() === q ||
+          r.name.toLowerCase() === q ||
+          r.location.toLowerCase() === q
+        )
+
+        if (match) {
+          setSelectedRouter(match)
+          setUnrecognizedParam(null)
+          setIsChangingLocation(false)
+        } else {
+          setSelectedRouter(null)
+          setUnrecognizedParam(rawRouterParam.trim())
+          setIsChangingLocation(true)
+        }
+      } else {
+        setSelectedRouter(null)
+        setUnrecognizedParam(null)
+        setIsChangingLocation(true)
       }
     } catch (error) {
       toast.error('Failed to load plans')
+    } finally {
+      setLoadingData(false)
+    }
+  }
+
+  const handleSelectLocation = (routerId: string) => {
+    const chosen = routers.find(r => r.id === routerId)
+    if (chosen) {
+      setSelectedRouter(chosen)
+      setUnrecognizedParam(null)
+      setIsChangingLocation(false)
+      setSearchParams({ routerId: chosen.id })
     }
   }
 
@@ -226,13 +292,23 @@ const CustomerPortal: React.FC = () => {
     }
   }
 
+  const displayedPlans = selectedRouter
+    ? plans.filter(p => p.routerId === selectedRouter.id || p.router?.id === selectedRouter.id)
+    : []
+
   const PlanCard: React.FC<{ plan: Plan }> = ({ plan }) => (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
       <div className="text-center">
         <div className="inline-flex items-center justify-center w-12 h-12 bg-primary-100 rounded-full mb-4">
           <Wifi className="w-6 h-6 text-primary-600" />
         </div>
-        <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+        <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.name}</h3>
+        {plan.router?.location && (
+          <div className="inline-flex items-center text-xs font-medium text-primary-700 bg-primary-50 px-2.5 py-0.5 rounded-full mb-3">
+            <MapPin className="w-3 h-3 mr-1" />
+            {plan.router.location}
+          </div>
+        )}
         {plan.description && (
           <p className="text-gray-600 mb-4">{plan.description}</p>
         )}
@@ -281,7 +357,7 @@ const CustomerPortal: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm">
+      <div className="bg-white shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center">
             <div className="flex items-center justify-center mb-4">
@@ -291,33 +367,149 @@ const CustomerPortal: React.FC = () => {
             <p className="text-lg text-gray-600 mb-2">Smart WiFi Billing for the Modern Network</p>
             <p className="text-sm text-gray-500 italic">"Connect. Pay. Browse — Seamlessly."</p>
 
-            {/* Connection Status */}
-            <div className="mt-6 inline-flex items-center px-4 py-2 rounded-full bg-gray-100">
-              <div
-                className={`w-3 h-3 rounded-full mr-2 ${
-                  connectionStatus === 'connected' ? 'bg-green-500 pulse-dot' : 'bg-gray-400'
-                }`}
-              ></div>
-              <span className="text-sm font-medium">
-                {connectionStatus === 'connected' ? 'Connected to Internet' : 'Not Connected'}
-              </span>
+            {/* Badges / Location Bar */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {/* Connection Status */}
+              <div className="inline-flex items-center px-4 py-2 rounded-full bg-gray-100">
+                <div
+                  className={`w-3 h-3 rounded-full mr-2 ${
+                    connectionStatus === 'connected' ? 'bg-green-500 pulse-dot' : 'bg-gray-400'
+                  }`}
+                ></div>
+                <span className="text-sm font-medium">
+                  {connectionStatus === 'connected' ? 'Connected to Internet' : 'Not Connected'}
+                </span>
+              </div>
+
+              {/* Active Location Display */}
+              {selectedRouter && !isChangingLocation && (
+                <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary-50 border border-primary-200 text-sm text-gray-700 shadow-sm">
+                  <MapPin className="w-4 h-4 text-primary-600 mr-2 flex-shrink-0" />
+                  <span>
+                    Connected at: <strong className="text-gray-900 font-semibold">{selectedRouter.location || selectedRouter.name}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsChangingLocation(true)}
+                    className="ml-3 text-xs font-semibold text-primary-600 hover:text-primary-800 underline transition-colors"
+                  >
+                    Change location
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Plans Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Choose Your Internet Plan</h2>
-          <p className="text-gray-600">Select a plan, pay securely via Paystack, and get instant internet access</p>
+      {/* Location Selector and Warning Banner */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        {/* Unrecognized router parameter warning notice */}
+        {unrecognizedParam && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start space-x-3 text-amber-900 shadow-sm">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-sm">
+                Unrecognized hotspot location: <span className="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-amber-900">{unrecognizedParam}</span>
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                The router parameter provided does not match any active hotspot location. Please select your current location from the dropdown below to view available plans.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Location selector dropdown: shown when missing, unrecognized, or user clicked "Change location" */}
+        {(!selectedRouter || isChangingLocation) && (
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center space-x-2 text-gray-900 font-semibold text-base mb-1">
+                  <MapPin className="w-5 h-5 text-primary-600" />
+                  <span>Choose Your Hotspot Location</span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Select where you are connected to view internet plans for your area.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <select
+                  value={selectedRouter?.id || ''}
+                  onChange={(e) => handleSelectLocation(e.target.value)}
+                  className="w-full md:w-64 px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 shadow-sm"
+                >
+                  <option value="" disabled>-- Select a Location --</option>
+                  {routers.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.location ? `${r.location} (${r.name})` : r.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedRouter && isChangingLocation && (
+                  <button
+                    type="button"
+                    onClick={() => setIsChangingLocation(false)}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Plans Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center mb-10">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Internet Plan</h2>
+          <p className="text-gray-600">
+            {selectedRouter
+              ? `Showing plans available for ${selectedRouter.location || selectedRouter.name}`
+              : 'Select your location above to see available plans'}
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {plans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} />
-          ))}
-        </div>
+        {loadingData ? (
+          <div className="text-center py-16">
+            <div className="loading-spinner mx-auto mb-4"></div>
+            <p className="text-gray-500 text-sm">Loading available plans...</p>
+          </div>
+        ) : !selectedRouter ? (
+          <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300 p-8 max-w-lg mx-auto shadow-sm">
+            <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MapPin className="w-8 h-8 text-primary-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Location Required</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Please choose your hotspot location above to see available internet plans and pricing.
+            </p>
+          </div>
+        ) : displayedPlans.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300 p-8 max-w-lg mx-auto shadow-sm">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Wifi className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">No Plans Available</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              There are currently no active internet plans available for <strong>{selectedRouter.location || selectedRouter.name}</strong>.
+            </p>
+            <button
+              onClick={() => setIsChangingLocation(true)}
+              className="inline-flex items-center px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium text-sm shadow-sm"
+            >
+              Change Location
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {displayedPlans.map((plan) => (
+              <PlanCard key={plan.id} plan={plan} />
+            ))}
+          </div>
+        )}
 
         {/* How it Works */}
         <div className="mt-16 bg-white rounded-lg shadow-sm p-8">

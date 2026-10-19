@@ -324,4 +324,132 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
     assert.ok(connectBody.data.session.plan);
     assert.ok(connectBody.data.session.endTime);
   });
+
+  test('GET /api/public/routers returns active routers without exposing credentials', async () => {
+    // Create an active router and an inactive router
+    const activeRouter = await prisma.router.create({
+      data: {
+        name: 'Public Test Active Router',
+        location: 'Downtown Branch',
+        host: '192.168.10.1',
+        port: 8728,
+        username: 'admin_active',
+        password: 'secret_password_123',
+        isActive: true,
+      }
+    });
+
+    const inactiveRouter = await prisma.router.create({
+      data: {
+        name: 'Public Test Inactive Router',
+        location: 'Old Branch',
+        host: '192.168.10.2',
+        port: 8728,
+        username: 'admin_inactive',
+        password: 'secret_password_456',
+        isActive: false,
+      }
+    });
+
+    const res = await fetch(`${baseUrl}/routers`);
+    assert.equal(res.status, 200);
+    const body = await res.json() as any;
+    assert.equal(body.success, true);
+    assert.ok(Array.isArray(body.data));
+
+    const foundActive = body.data.find((r: any) => r.id === activeRouter.id);
+    const foundInactive = body.data.find((r: any) => r.id === inactiveRouter.id);
+
+    assert.ok(foundActive, 'Active router should be returned in public routers list');
+    assert.equal(foundInactive, undefined, 'Inactive router should NOT be returned');
+    assert.equal(foundActive.name, 'Public Test Active Router');
+    assert.equal(foundActive.location, 'Downtown Branch');
+    assert.equal(foundActive.password, undefined, 'Password must not be exposed');
+    assert.equal(foundActive.host, undefined, 'Host must not be exposed');
+  });
+
+  test('GET /api/public/plans filters by routerId and router query params', async () => {
+    // Create two test routers
+    const routerA = await prisma.router.create({
+      data: {
+        name: 'Router Alpha',
+        location: 'North Zone',
+        host: '10.0.1.1',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+        isActive: true,
+      }
+    });
+
+    const routerB = await prisma.router.create({
+      data: {
+        name: 'Router Beta',
+        location: 'South Zone',
+        host: '10.0.2.1',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+        isActive: true,
+      }
+    });
+
+    // Create plan on routerA
+    const planA = await prisma.plan.create({
+      data: {
+        name: 'Plan Alpha Only',
+        price: 30,
+        duration: 2,
+        dataLimit: '2GB',
+        speedLimit: '5Mbps',
+        isActive: true,
+        routerId: routerA.id,
+      }
+    });
+
+    // Create plan on routerB
+    const planB = await prisma.plan.create({
+      data: {
+        name: 'Plan Beta Only',
+        price: 60,
+        duration: 5,
+        dataLimit: '5GB',
+        speedLimit: '10Mbps',
+        isActive: true,
+        routerId: routerB.id,
+      }
+    });
+
+    // 1. Fetch with ?routerId=<routerA.id>
+    const resId = await fetch(`${baseUrl}/plans?routerId=${routerA.id}`);
+    assert.equal(resId.status, 200);
+    const bodyId = await resId.json() as any;
+    assert.equal(bodyId.success, true);
+    assert.ok(bodyId.data.some((p: any) => p.id === planA.id));
+    assert.ok(!bodyId.data.some((p: any) => p.id === planB.id));
+
+    // 2. Fetch with ?router=Router Alpha (by name)
+    const resName = await fetch(`${baseUrl}/plans?router=${encodeURIComponent('Router Alpha')}`);
+    assert.equal(resName.status, 200);
+    const bodyName = await resName.json() as any;
+    assert.equal(bodyName.success, true);
+    assert.ok(bodyName.data.some((p: any) => p.id === planA.id));
+    assert.ok(!bodyName.data.some((p: any) => p.id === planB.id));
+
+    // 3. Fetch with ?router=South Zone (by location)
+    const resLoc = await fetch(`${baseUrl}/plans?router=${encodeURIComponent('South Zone')}`);
+    assert.equal(resLoc.status, 200);
+    const bodyLoc = await resLoc.json() as any;
+    assert.equal(bodyLoc.success, true);
+    assert.ok(bodyLoc.data.some((p: any) => p.id === planB.id));
+    assert.ok(!bodyLoc.data.some((p: any) => p.id === planA.id));
+
+    // 4. Fetch with unrecognized router
+    const resUnrec = await fetch(`${baseUrl}/plans?router=NonexistentLocation12345`);
+    assert.equal(resUnrec.status, 200);
+    const bodyUnrec = await resUnrec.json() as any;
+    assert.equal(bodyUnrec.success, true);
+    assert.equal(bodyUnrec.data.length, 0);
+  });
 });
+
