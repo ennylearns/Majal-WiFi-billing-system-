@@ -128,3 +128,31 @@ export interface Router {
   createdAt: string
   updatedAt: string
 }
+
+export type RouterDiagnosticStatus = 'online' | 'tunnel_offline' | 'auth_failed' | 'unreachable'
+
+export interface TestConnectionResponse {
+  success: boolean
+  status?: RouterDiagnosticStatus
+  message?: string
+  error?: string
+}
+
+export interface ProvisionScriptResponse {
+  success: boolean
+  script?: string
+  data?: {
+    script: string
+  }
+  error?: string
+}
+
+export interface CreateRouterData {
+  name: string
+  location: string
+  host?: string
+  port?: number
+  username?: string
+  password?: string
+  isActive?: boolean
+}

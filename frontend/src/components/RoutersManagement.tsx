@@ -15,14 +15,23 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  Terminal,
+  AlertTriangle,
+  Info,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import type { Router } from '../types'
+import type { Router, RouterDiagnosticStatus } from '../types'
+import ProvisioningScriptModal from './ProvisioningScriptModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type TestResult = { status: 'idle' | 'testing' | 'ok' | 'fail'; message?: string }
+type TestResult = {
+  status: 'idle' | 'testing' | RouterDiagnosticStatus
+  message?: string
+}
 
 type FormData = {
   name: string
@@ -64,12 +73,16 @@ const RoutersManagement: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Modal state
+  // Add / Edit Modal state
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Router | null>(null)
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
+
+  // Provisioning Script Modal state
+  const [selectedScriptRouter, setSelectedScriptRouter] = useState<Router | null>(null)
 
   // Per-row test-connection state
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
@@ -99,6 +112,7 @@ const RoutersManagement: React.FC = () => {
     setEditing(null)
     setFormData(EMPTY_FORM)
     setShowPassword(false)
+    setShowAdvancedSettings(false)
     setShowModal(true)
   }
 
@@ -113,12 +127,14 @@ const RoutersManagement: React.FC = () => {
       password: '', // never pre-fill password
     })
     setShowPassword(false)
+    setShowAdvancedSettings(true)
     setShowModal(true)
   }
 
   const closeModal = () => {
     setShowModal(false)
     setEditing(null)
+    setShowAdvancedSettings(false)
   }
 
   const field = (key: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -130,26 +146,41 @@ const RoutersManagement: React.FC = () => {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const payload = {
-        name: formData.name,
-        location: formData.location,
-        host: formData.host,
-        port: parseInt(formData.port, 10),
-        username: formData.username,
-        isActive: true,
-        ...(formData.password ? { password: formData.password } : {}),
-      }
+      const payload = editing
+        ? {
+            name: formData.name,
+            location: formData.location,
+            host: formData.host,
+            port: parseInt(formData.port, 10),
+            username: formData.username,
+            isActive: true,
+            ...(formData.password ? { password: formData.password } : {}),
+          }
+        : {
+            name: formData.name,
+            location: formData.location,
+            isActive: true,
+            ...(showAdvancedSettings && formData.host ? { host: formData.host } : {}),
+            ...(showAdvancedSettings && formData.port ? { port: parseInt(formData.port, 10) } : {}),
+            ...(showAdvancedSettings && formData.username ? { username: formData.username } : {}),
+            ...(showAdvancedSettings && formData.password ? { password: formData.password } : {}),
+          }
 
       if (editing) {
         await adminAPI.updateRouter(editing.id, payload)
         toast.success('Router updated')
+        closeModal()
+        fetchRouters()
       } else {
-        await adminAPI.createRouter({ ...payload, password: formData.password })
+        const res = await adminAPI.createRouter(payload)
         toast.success('Router created')
+        closeModal()
+        fetchRouters()
+        // Auto-open ProvisioningScriptModal immediately after submitting Add Router
+        if (res.data) {
+          setSelectedScriptRouter(res.data)
+        }
       }
-
-      closeModal()
-      fetchRouters()
     } catch {
       toast.error(editing ? 'Failed to update router' : 'Failed to create router')
     } finally {
@@ -176,18 +207,39 @@ const RoutersManagement: React.FC = () => {
     setTestResults(r => ({ ...r, [router.id]: { status: 'testing' } }))
     try {
       const res = await adminAPI.testRouterConnection(router.id)
-      if (res.success) {
-        setTestResults(r => ({ ...r, [router.id]: { status: 'ok' } }))
+      if (res.status === 'online' || (res.success && !res.status)) {
+        setTestResults(r => ({
+          ...r,
+          [router.id]: { status: 'online', message: res.message || 'Router online' },
+        }))
+      } else if (res.status === 'tunnel_offline') {
+        setTestResults(r => ({
+          ...r,
+          [router.id]: {
+            status: 'tunnel_offline',
+            message: res.error || 'WireGuard tunnel offline (pending setup script execution)',
+          },
+        }))
+      } else if (res.status === 'auth_failed') {
+        setTestResults(r => ({
+          ...r,
+          [router.id]: { status: 'auth_failed', message: res.error || 'Authentication failed' },
+        }))
+      } else if (res.status === 'unreachable') {
+        setTestResults(r => ({
+          ...r,
+          [router.id]: { status: 'unreachable', message: res.error || 'Router unreachable' },
+        }))
       } else {
         setTestResults(r => ({
           ...r,
-          [router.id]: { status: 'fail', message: res.error || 'Connection failed' },
+          [router.id]: { status: 'unreachable', message: res.error || 'Connection failed' },
         }))
       }
     } catch {
       setTestResults(r => ({
         ...r,
-        [router.id]: { status: 'fail', message: 'Network error' },
+        [router.id]: { status: 'unreachable', message: 'Network error' },
       }))
     }
   }
@@ -210,6 +262,7 @@ const RoutersManagement: React.FC = () => {
             disabled={refreshing}
             className="p-2.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors disabled:opacity-50"
             title="Refresh"
+            aria-label="Refresh"
           >
             <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
@@ -311,13 +364,14 @@ const RoutersManagement: React.FC = () => {
                         <StatusBadge isActive={router.isActive} />
                       </td>
 
-                      {/* Test Connection */}
+                      {/* Test Connection / Granular Status */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleTest(router)}
                             disabled={tr.status === 'testing'}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-700 hover:bg-indigo-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label={`Test connection for ${router.name}`}
                           >
                             {tr.status === 'testing' ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -327,19 +381,44 @@ const RoutersManagement: React.FC = () => {
                             {tr.status === 'testing' ? 'Testing…' : 'Test'}
                           </button>
 
-                          {tr.status === 'ok' && (
-                            <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
+                          {/* Granular Diagnostics Badges */}
+                          {tr.status === 'online' && (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm"
+                              title={tr.message || 'Router online'}
+                            >
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              Connected
+                              Online
                             </span>
                           )}
-                          {tr.status === 'fail' && (
+
+                          {tr.status === 'tunnel_offline' && (
                             <span
-                              className="flex items-center gap-1 text-red-600 text-xs font-medium max-w-[180px] truncate"
-                              title={tr.message}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border bg-amber-50 text-amber-700 border-amber-200 shadow-sm"
+                              title={tr.message || 'WireGuard tunnel offline - paste setup script in Winbox'}
                             >
-                              <XCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                              {tr.message || 'Failed'}
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              Tunnel Offline (Pending Setup)
+                            </span>
+                          )}
+
+                          {tr.status === 'auth_failed' && (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border bg-red-50 text-red-700 border-red-200 shadow-sm"
+                              title={tr.message || 'Authentication error'}
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              Auth Error
+                            </span>
+                          )}
+
+                          {tr.status === 'unreachable' && (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border bg-gray-100 text-gray-600 border-gray-300 shadow-sm"
+                              title={tr.message || 'Router unreachable'}
+                            >
+                              <WifiOff className="w-3.5 h-3.5" />
+                              Unreachable
                             </span>
                           )}
                         </div>
@@ -348,10 +427,21 @@ const RoutersManagement: React.FC = () => {
                       {/* Actions */}
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1">
+                          {/* Setup Script Modal Button */}
+                          <button
+                            onClick={() => setSelectedScriptRouter(router)}
+                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Setup Script"
+                            aria-label={`Setup Script for ${router.name}`}
+                          >
+                            <Terminal className="w-4 h-4" />
+                          </button>
+
                           <button
                             onClick={() => openEdit(router)}
                             className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                             title="Edit router"
+                            aria-label="Edit router"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
@@ -359,6 +449,7 @@ const RoutersManagement: React.FC = () => {
                             onClick={() => handleDelete(router)}
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete router"
+                            aria-label="Delete router"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -375,7 +466,11 @@ const RoutersManagement: React.FC = () => {
 
       {/* Add / Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
@@ -389,6 +484,7 @@ const RoutersManagement: React.FC = () => {
               </div>
               <button
                 onClick={closeModal}
+                aria-label="Close"
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -397,12 +493,23 @@ const RoutersManagement: React.FC = () => {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+              {!editing && (
+                <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-start gap-2.5 text-xs text-indigo-900">
+                  <Info className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold block">Automatic VPN & API Setup</span>
+                    WireGuard tunnel IP and API credentials will be auto-generated. You will receive a copy-paste setup script immediately after adding this router.
+                  </div>
+                </div>
+              )}
+
               {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="router-name-input" className="block text-sm font-medium text-gray-700 mb-1">
                   Router Name <span className="text-red-400">*</span>
                 </label>
                 <input
+                  id="router-name-input"
                   type="text"
                   required
                   value={formData.name}
@@ -414,10 +521,11 @@ const RoutersManagement: React.FC = () => {
 
               {/* Location */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="router-location-input" className="block text-sm font-medium text-gray-700 mb-1">
                   Location <span className="text-red-400">*</span>
                 </label>
                 <input
+                  id="router-location-input"
                   type="text"
                   required
                   value={formData.location}
@@ -427,78 +535,173 @@ const RoutersManagement: React.FC = () => {
                 />
               </div>
 
-              {/* Host + Port row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Host / IP <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.host}
-                    onChange={field('host')}
-                    placeholder="192.168.1.1"
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                  />
-                </div>
+              {/* Optional Advanced Settings Toggle for Create / Direct for Edit */}
+              {!editing ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={formData.port}
-                    onChange={field('port')}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Username */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Username <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoComplete="username"
-                  value={formData.username}
-                  onChange={field('username')}
-                  placeholder="admin"
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password{!editing && <span className="text-red-400"> *</span>}
-                  {editing && (
-                    <span className="text-gray-400 font-normal ml-1">(leave blank to keep current)</span>
-                  )}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required={!editing}
-                    autoComplete={editing ? 'new-password' : 'current-password'}
-                    value={formData.password}
-                    onChange={field('password')}
-                    placeholder={editing ? '••••••••' : 'Enter password'}
-                    className="w-full px-3.5 py-2.5 pr-10 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                  />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(s => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    tabIndex={-1}
+                    onClick={() => setShowAdvancedSettings(s => !s)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors pt-1"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showAdvancedSettings ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                    {showAdvancedSettings
+                      ? 'Hide advanced network settings'
+                      : 'Advanced network settings (optional)'}
                   </button>
+
+                  {showAdvancedSettings && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2">
+                          <label htmlFor="router-host-input" className="block text-xs font-medium text-gray-700 mb-1">
+                            Host / IP (optional)
+                          </label>
+                          <input
+                            id="router-host-input"
+                            type="text"
+                            value={formData.host}
+                            onChange={field('host')}
+                            placeholder="Auto-assigned WireGuard IP"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="router-port-input" className="block text-xs font-medium text-gray-700 mb-1">
+                            Port
+                          </label>
+                          <input
+                            id="router-port-input"
+                            type="number"
+                            min={1}
+                            max={65535}
+                            value={formData.port}
+                            onChange={field('port')}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label htmlFor="router-username-input" className="block text-xs font-medium text-gray-700 mb-1">
+                          API Username (optional)
+                        </label>
+                        <input
+                          id="router-username-input"
+                          type="text"
+                          autoComplete="username"
+                          value={formData.username}
+                          onChange={field('username')}
+                          placeholder="Auto-generated"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="router-password-input" className="block text-xs font-medium text-gray-700 mb-1">
+                          API Password (optional)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="router-password-input"
+                            type={showPassword ? 'text' : 'password'}
+                            autoComplete="new-password"
+                            value={formData.password}
+                            onChange={field('password')}
+                            placeholder="Auto-generated"
+                            className="w-full px-3 py-2 pr-9 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(s => !s)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                            tabIndex={-1}
+                          >
+                            {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                /* Editing mode: Show full network fields */
+                <div className="space-y-4 pt-1 border-t border-gray-100">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <label htmlFor="router-edit-host" className="block text-sm font-medium text-gray-700 mb-1">
+                        Host / IP <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        id="router-edit-host"
+                        type="text"
+                        required
+                        value={formData.host}
+                        onChange={field('host')}
+                        placeholder="10.250.0.X"
+                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="router-edit-port" className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                      <input
+                        id="router-edit-port"
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={formData.port}
+                        onChange={field('port')}
+                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="router-edit-username" className="block text-sm font-medium text-gray-700 mb-1">
+                      Username <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      id="router-edit-username"
+                      type="text"
+                      required
+                      autoComplete="username"
+                      value={formData.username}
+                      onChange={field('username')}
+                      placeholder="admin"
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="router-edit-password" className="block text-sm font-medium text-gray-700 mb-1">
+                      Password
+                      <span className="text-gray-400 font-normal ml-1">(leave blank to keep current)</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="router-edit-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        value={formData.password}
+                        onChange={field('password')}
+                        placeholder="••••••••"
+                        className="w-full px-3.5 py-2.5 pr-10 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(s => !s)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-3 pt-2">
@@ -522,6 +725,13 @@ const RoutersManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Provisioning Script Modal */}
+      <ProvisioningScriptModal
+        isOpen={!!selectedScriptRouter}
+        onClose={() => setSelectedScriptRouter(null)}
+        router={selectedScriptRouter}
+      />
     </div>
   )
 }

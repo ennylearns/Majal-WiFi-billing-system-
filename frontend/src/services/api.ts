@@ -12,7 +12,10 @@ import type {
   PaginatedResponse,
   PaymentInitiateData,
   Router,
-  PublicRouter
+  PublicRouter,
+  CreateRouterData,
+  TestConnectionResponse,
+  ProvisionScriptResponse
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -144,7 +147,7 @@ export const adminAPI = {
   getRouters: (): Promise<ApiResponse<Router[]>> =>
     privateApi.get('/admin/routers').then(res => res.data),
 
-  createRouter: (data: Omit<Router, 'id' | 'createdAt' | 'updatedAt' | 'password'> & { password: string }): Promise<ApiResponse<Router>> =>
+  createRouter: (data: CreateRouterData): Promise<ApiResponse<Router>> =>
     privateApi.post('/admin/routers', data).then(res => res.data),
 
   updateRouter: (id: string, data: Partial<Omit<Router, 'id' | 'createdAt' | 'updatedAt'>>): Promise<ApiResponse<Router>> =>
@@ -153,7 +156,10 @@ export const adminAPI = {
   deleteRouter: (id: string): Promise<ApiResponse<{ message: string }>> =>
     privateApi.delete(`/admin/routers/${id}`).then(res => res.data),
 
-  testRouterConnection: (id: string): Promise<ApiResponse<{ message?: string }>> =>
+  getProvisionScript: (id: string): Promise<ProvisionScriptResponse> =>
+    privateApi.get(`/admin/routers/${id}/provision-script`).then(res => res.data),
+
+  testRouterConnection: (id: string): Promise<TestConnectionResponse> =>
     privateApi.post(`/admin/routers/${id}/test-connection`).then(res => res.data),
 
   // Legacy single-router status

@@ -4,15 +4,15 @@
 
 **Blocked by:** 12
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Update "Add Router" modal to require only `Name` and `Location` (hide or make optional `host`, `port`, `username`, `password`)
-- [ ] Create `ProvisioningScriptModal` component:
+- [x] Update "Add Router" modal to require only `Name` and `Location` (hide or make optional `host`, `port`, `username`, `password`)
+- [x] Create `ProvisioningScriptModal` component:
   - Fetches script from `GET /api/admin/routers/:id/provision-script`
   - Renders script in a monospace code block with quick scrolling
   - One-click "Copy to Clipboard" button with feedback toast/state
   - Clear 3-step Winbox terminal paste instructions
-- [ ] Auto-open `ProvisioningScriptModal` immediately after an admin submits the "Add Router" form
-- [ ] Add a "Setup Script" action button (terminal/code icon) to each row in the routers table
-- [ ] Enhance "Test Connection" action to display granular status badges: `Online` (green), `Tunnel Offline (Pending Setup)` (amber), `Auth Error` (red), `Unreachable` (gray)
-- [ ] Add frontend tests covering modal behavior, script fetching, and clipboard copy interaction
+- [x] Auto-open `ProvisioningScriptModal` immediately after an admin submits the "Add Router" form
+- [x] Add a "Setup Script" action button (terminal/code icon) to each row in the routers table
+- [x] Enhance "Test Connection" action to display granular status badges: `Online` (green), `Tunnel Offline (Pending Setup)` (amber), `Auth Error` (red), `Unreachable` (gray)
+- [x] Add frontend tests covering modal behavior, script fetching, and clipboard copy interaction
