@@ -2,7 +2,7 @@ import express, { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { body, validationResult } from 'express-validator';
-import mikrotikService from '../services/mikrotikService';
+import mikrotikService, { MikrotikService } from '../services/mikrotikService';
 import sessionService from '../services/sessionService';
 
 const router = express.Router();
@@ -329,6 +329,165 @@ router.get('/router/status', async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get router status' });
+  }
+});
+
+// Get all routers
+router.get('/routers', async (req: AuthRequest, res: Response) => {
+  try {
+    const routers = await prisma.router.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, data: routers });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get routers' });
+  }
+});
+
+// Create router
+router.post('/routers', [
+  body('name').notEmpty().withMessage('Router name is required'),
+  body('location').notEmpty().withMessage('Location is required'),
+  body('host').notEmpty().withMessage('Host is required'),
+  body('port').optional().isInt({ min: 1, max: 65535 }).withMessage('Port must be a valid integer between 1 and 65535'),
+  body('username').notEmpty().withMessage('Username is required'),
+  body('password').notEmpty().withMessage('Password is required')
+], async (req: AuthRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { name, location, host, port, username, password } = req.body;
+
+    const routerRecord = await prisma.router.create({
+      data: {
+        name,
+        location,
+        host,
+        port: port !== undefined ? Number(port) : 8728,
+        username,
+        password
+      }
+    });
+
+    res.status(201).json({ success: true, data: routerRecord });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to create router' });
+  }
+});
+
+// Update router
+router.put('/routers/:id', [
+  body('name').optional().notEmpty().withMessage('Router name cannot be empty'),
+  body('location').optional().notEmpty().withMessage('Location cannot be empty'),
+  body('host').optional().notEmpty().withMessage('Host cannot be empty'),
+  body('port').optional().isInt({ min: 1, max: 65535 }).withMessage('Port must be a valid integer between 1 and 65535'),
+  body('username').optional().notEmpty().withMessage('Username cannot be empty'),
+  body('password').optional().notEmpty().withMessage('Password cannot be empty'),
+  body('isActive').optional().isBoolean().withMessage('isActive must be a boolean')
+], async (req: AuthRequest, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const existingRouter = await prisma.router.findUnique({ where: { id } });
+    if (!existingRouter) {
+      return res.status(404).json({ success: false, error: 'Router not found' });
+    }
+
+    const { name, location, host, port, username, password, isActive } = req.body;
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (location !== undefined) updateData.location = location;
+    if (host !== undefined) updateData.host = host;
+    if (port !== undefined) updateData.port = Number(port);
+    if (username !== undefined) updateData.username = username;
+    if (password !== undefined) updateData.password = password;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    const updatedRouter = await prisma.router.update({
+      where: { id },
+      data: updateData
+    });
+
+    res.json({ success: true, data: updatedRouter });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update router' });
+  }
+});
+
+// Delete router
+router.delete('/routers/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const routerRecord = await prisma.router.findUnique({ where: { id } });
+    if (!routerRecord) {
+      return res.status(404).json({ success: false, error: 'Router not found' });
+    }
+
+    const activeSessionsCount = await prisma.session.count({
+      where: {
+        routerId: id,
+        status: 'ACTIVE'
+      }
+    });
+
+    if (activeSessionsCount > 0) {
+      const updatedRouter = await prisma.router.update({
+        where: { id },
+        data: { isActive: false }
+      });
+
+      return res.json({
+        success: true,
+        message: 'Router deactivated successfully',
+        data: updatedRouter
+      });
+    }
+
+    await prisma.router.delete({ where: { id } });
+    res.json({ success: true, message: 'Router deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to delete router' });
+  }
+});
+
+// Test router connection
+router.post('/routers/:id/test-connection', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const routerRecord = await prisma.router.findUnique({ where: { id } });
+    if (!routerRecord) {
+      return res.status(404).json({ success: false, error: 'Router not found' });
+    }
+
+    const service = new MikrotikService({
+      host: routerRecord.host,
+      port: routerRecord.port,
+      username: routerRecord.username,
+      password: routerRecord.password
+    });
+
+    try {
+      await service.connect();
+      await service.disconnect();
+      return res.json({ success: true });
+    } catch (connErr: any) {
+      return res.json({
+        success: false,
+        error: connErr?.message || 'Failed to connect to router'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to test router connection' });
   }
 });
 
