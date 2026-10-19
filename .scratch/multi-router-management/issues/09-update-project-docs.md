@@ -4,11 +4,11 @@
 
 **Blocked by:** 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `README.md` MikroTik setup section updated to describe the multi-router model, WireGuard CGNAT traversal, and the admin UI for managing routers
-- [ ] `DEPLOYMENT.md` updated: WireGuard server setup guide, env-var router config documented as a one-time seed, and instructions for provisioning routers via generated scripts
-- [ ] `.env.example` updated with `WIREGUARD_*` and `PORTAL_DOMAIN` variables, and comments on legacy `MIKROTIK_*` vars
-- [ ] Add operator guide explaining how to paste the provisioning script into Winbox Terminal
-- [ ] Any other docs referencing a single hardcoded router (e.g. `quick-start.md`) are updated to match the new architecture
-- [ ] No doc references the old singleton MikrotikService pattern as current behaviour
+- [x] `README.md` MikroTik setup section updated to describe the multi-router model, WireGuard CGNAT traversal, and the admin UI for managing routers
+- [x] `DEPLOYMENT.md` updated: WireGuard server setup guide, env-var router config documented as a one-time seed, and instructions for provisioning routers via generated scripts
+- [x] `.env.example` updated with `WIREGUARD_*` and `PORTAL_DOMAIN` variables, and comments on legacy `MIKROTIK_*` vars
+- [x] Add operator guide explaining how to paste the provisioning script into Winbox Terminal
+- [x] Any other docs referencing a single hardcoded router (e.g. `quick-start.md`) are updated to match the new architecture
+- [x] No doc references the old singleton MikrotikService pattern as current behaviour

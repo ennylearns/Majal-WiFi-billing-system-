@@ -16,15 +16,20 @@ This is a comprehensive WiFi billing system featuring Paystack payment integrati
 
 ### 💼 Admin Features
 - **Dashboard**: Real-time analytics and system monitoring
+- **Multi-Router Management**: Register, monitor, test, and manage multiple MikroTik routers across physical sites
+- **Plan-to-Router Binding**: Associate internet plans with designated physical routers
+- **Automated Provisioning**: Generate 1-click RouterOS v7 setup scripts with API lockdown and captive portal redirects
+- **WireGuard CGNAT Traversal**: Secure tunnel networking for routers on private/CGNAT networks
 - **User Management**: Customer account management and activity tracking
-- **Plan Management**: Create and manage internet packages
-- **Session Control**: Monitor and terminate user sessions
+- **Plan Management**: Create and manage internet packages per router
+- **Session Control**: Monitor and terminate active user sessions across routers
 - **Payment Tracking**: Complete payment history and reporting
-- **Router Integration**: MikroTik API for bandwidth and access control
 
 ### 🔧 Technical Features
-- **Modern Stack**: React 18 + TypeScript + Node.js + PostgreSQL
-- **Security**: JWT authentication, HTTPS, rate limiting
+- **Modern Stack**: React 18 + TypeScript + Node.js + PostgreSQL + Prisma ORM
+- **Router Integration**: Dynamic per-router MikroTik API client instances with connection pooling
+- **VPN Tunneling**: Built-in WireGuard keypair generation and peer management (`10.250.0.0/24`)
+- **Security**: JWT authentication, HTTPS, rate limiting, and restricted API access
 - **Scalable**: Cloud-ready with Docker support
 - **Notifications**: SMS alerts via Africa's Talking
 - **API-First**: RESTful API with comprehensive documentation
@@ -32,23 +37,33 @@ This is a comprehensive WiFi billing system featuring Paystack payment integrati
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Customer      │    │   Admin         │    │   MikroTik      │
-│   Portal        │    │   Dashboard     │    │   Router        │
-│   (React)       │    │   (React)       │    │   (API)         │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   Backend API   │
-                    │   (Node.js)     │
-                    └─────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   PostgreSQL    │
-                    │   Database      │
-                    └─────────────────┘
+┌─────────────────┐    ┌─────────────────┐
+│   Customer      │    │   Admin         │
+│   Portal        │    │   Dashboard     │
+│   (React)       │    │   (React)       │
+└─────────────────┘    └─────────────────┘
+         │                       │
+         └───────────┬───────────┘
+                     │
+            ┌─────────────────┐
+            │   Backend API   │
+            │   (Node.js)     │
+            └────────┬────────┘
+                     │
+       ┌─────────────┴─────────────┐
+       │                           │
+┌──────────────┐         ┌───────────────────────────────┐
+│  PostgreSQL  │         │   WireGuard Server (wg0)      │
+│  Database    │         │      (10.250.0.1/24)          │
+└──────────────┘         └───────────────┬───────────────┘
+                                         │ WireGuard VPN
+                        ┌────────────────┴────────────────┐
+                        │                                 │
+             ┌─────────────────────┐           ┌─────────────────────┐
+             │  MikroTik Router A  │           │  MikroTik Router B  │
+             │   (Location 1)      │           │   (Location 2)      │
+             │   10.250.0.2/32     │           │   10.250.0.3/32     │
+             └─────────────────────┘           └─────────────────────┘
 ```
 
 ## 🚀 Quick Start
@@ -120,10 +135,22 @@ JWT_SECRET="your-super-secret-jwt-key-here"
 PAYSTACK_SECRET_KEY="your-paystack-secret-key"
 PAYSTACK_PUBLIC_KEY="your-paystack-public-key"
 
-# MikroTik Router
+# Captive Portal Domain
+PORTAL_DOMAIN="wifi.majal.example.com"
+
+# WireGuard Tunnel Configuration (CGNAT Traversal)
+WIREGUARD_INTERFACE="wg0"
+WIREGUARD_SERVER_ENDPOINT="vpn.example.com:51820"
+WIREGUARD_SERVER_PUBLIC_KEY="your-wireguard-server-public-key"
+WIREGUARD_SUBNET="10.250.0.0/24"
+
+# Legacy MikroTik Startup Seed (Optional)
+# NOTE: Only used for a one-time database seed on first run if no routers exist.
+# Active routers and credentials are managed directly in the Admin UI.
 MIKROTIK_HOST="192.168.1.1"
 MIKROTIK_USERNAME="admin"
 MIKROTIK_PASSWORD="your-router-password"
+MIKROTIK_PORT="8728"
 
 # SMS (Africa's Talking)
 AFRICASTALKING_USERNAME="sandbox"
@@ -149,7 +176,7 @@ The system comes with pre-configured plans:
 ## 🔌 API Endpoints
 
 ### Public API (Customer Portal)
-- `GET /api/public/plans` - Get available plans
+- `GET /api/public/plans` - Get available plans (supports `?routerId=<id>` filtering)
 - `POST /api/public/register` - Register new user
 - `POST /api/public/login` - User login
 - `POST /api/public/payment` - Initialize Paystack transaction
@@ -159,18 +186,25 @@ The system comes with pre-configured plans:
 
 ### Admin API
 - `GET /api/admin/dashboard` - Dashboard statistics
+- `GET /api/admin/routers` - List all routers with active session metrics
+- `POST /api/admin/routers` - Register a new router & provision WireGuard peer
+- `PUT /api/admin/routers/:id` - Update router metadata or credentials
+- `DELETE /api/admin/routers/:id` - Decommission router and release WireGuard peer
+- `POST /api/admin/routers/:id/test-connection` - Test live MikroTik API reachability
+- `GET /api/admin/routers/:id/provision-script` - Generate idempotent RouterOS v7 provisioning script
 - `GET /api/admin/users` - Get all users
-- `GET /api/admin/plans` - Manage plans
-- `GET /api/admin/sessions` - Monitor sessions
+- `GET /api/admin/plans` - Manage plans (with router binding)
+- `GET /api/admin/sessions` - Monitor sessions across routers
 - `GET /api/admin/payments` - Payment history
 
 ## 🛠️ Development
 
 ### Database Schema
-The system uses Prisma ORM with the following main models:
+The system uses Prisma ORM with the following core models:
+- **Router**: MikroTik devices, credentials, WireGuard tunnel configuration (`wgPublicKey`, `wgTunnelIp`)
 - **User**: Customer and admin accounts
-- **Plan**: Internet packages
-- **Session**: Active user connections
+- **Plan**: Internet packages bound to a specific router (`routerId`)
+- **Session**: Active user connections tracked per router (`routerId`)
 - **Payment**: Paystack transactions
 - **Voucher**: Prepaid codes (optional)
 
@@ -209,6 +243,29 @@ docker-compose up -d
 4. Set up domain and DNS
 5. Configure Paystack webhook URL (`/api/public/payment/paystack/webhook`)
 
+## 📡 MikroTik Multi-Router & WireGuard Setup
+
+The system manages multiple MikroTik routers dynamically through the Admin UI. Each physical router connects over a dedicated WireGuard tunnel, ensuring reliable API communication even when routers are installed behind CGNAT or mobile LTE/5G connections.
+
+### How It Works
+1. **Dynamic Router Registration**: When you add a router in the Admin UI (`/admin` -> Routers), the backend generates a dedicated WireGuard keypair and allocates an internal tunnel IP (e.g. `10.250.0.2`).
+2. **WireGuard CGNAT Traversal**: The router initiates a WireGuard connection to the backend server with `persistent-keepalive=25s`, bypassing firewalls and carrier-grade NAT.
+3. **Automated Provisioning Script**: The Admin UI produces a ready-to-run RouterOS v7 script that configures:
+   - System identity name
+   - WireGuard client interface (`wg-majal`) and peer endpoint
+   - Dedicated `billing-api` user and permissions
+   - API service enabled and locked strictly to `10.250.0.1/32`
+   - Hotspot Walled Garden for the portal domain and Paystack checkout
+   - Captive portal `login.html` redirect passing `routerId` and identity parameters
+4. **Per-Router Session Isolation**: User hotspot accounts are created and cleared exclusively on the router assigned to their purchased plan.
+
+### Adding a New Router
+1. Navigate to **Admin Dashboard -> Routers** and click **Add Router**.
+2. Enter the friendly name, location description, and API credentials.
+3. Click **Setup Script** on the router card/row and copy the generated RouterOS v7 script.
+4. Open **Winbox**, connect to your MikroTik router, open **New Terminal**, and paste the script.
+5. In the Admin Dashboard, click **Test Connection** to confirm connectivity.
+
 ## 📱 Mobile App (Optional)
 
 The system is designed to support a mobile app using the same API:
@@ -225,15 +282,15 @@ The system is designed to support a mobile app using the same API:
 - **Input Validation**: Comprehensive data validation
 - **SQL Injection Protection**: Prisma ORM safety
 - **CORS Configuration**: Cross-origin request control
+- **API Lockdown**: MikroTik API restricted strictly to the WireGuard server tunnel IP (`10.250.0.1/32`)
 
 ## 📊 Monitoring & Analytics
 
 - Real-time dashboard with key metrics
-- User activity tracking
-- Revenue reporting
-- Session monitoring
-- Payment analytics
-- Router status monitoring
+- Multi-router monitoring with active session counts per device
+- WireGuard peer status and handshake tracking
+- User activity tracking and session expiration cleanup
+- Revenue reporting and Paystack transaction logs
 
 ## 🆘 Support & Troubleshooting
 
@@ -244,10 +301,12 @@ The system is designed to support a mobile app using the same API:
    - Verify webhook URL (`/api/public/payment/paystack/webhook`) is registered in Paystack dashboard
    - Check backend logs for signature verification or transaction initialization errors
 
-2. **Router connection issues**
-   - Verify MikroTik API is enabled
-   - Check network connectivity
-   - Confirm credentials are correct
+2. **Router connection issues / Test Connection fails**
+   - **WireGuard Tunnel**: Check if WireGuard peer has an active handshake on the server (`wg show wg0`) and on the router (`/interface/wireguard/peers print`).
+   - **Endpoint Reachability**: Ensure UDP port 51820 is open on the server firewall (`sudo ufw allow 51820/udp`).
+   - **API Service**: Verify API service is running on the router (`/ip/service print`) and allows `10.250.0.1/32`.
+   - **Credentials**: Ensure the API user username and password match the credentials entered in the Admin UI.
+   - **CGNAT Keepalive**: Ensure `persistent-keepalive=25s` is set on the router WireGuard peer.
 
 3. **Database connection errors**
    - Check PostgreSQL is running

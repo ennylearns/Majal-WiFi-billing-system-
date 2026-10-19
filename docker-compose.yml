@@ -31,9 +31,16 @@ services:
       # Add your Paystack and other API credentials here
       PAYSTACK_SECRET_KEY: "your-paystack-secret-key"
       PAYSTACK_PUBLIC_KEY: "your-paystack-public-key"
+      # Legacy MikroTik Router Seed (only used for one-time seed on fresh DB if no routers exist)
       MIKROTIK_HOST: "192.168.1.1"
       MIKROTIK_USERNAME: "admin"
       MIKROTIK_PASSWORD: "your-router-password"
+      # WireGuard & Captive Portal
+      WIREGUARD_INTERFACE: "wg0"
+      WIREGUARD_SERVER_ENDPOINT: "vpn.example.com:51820"
+      WIREGUARD_SERVER_PUBLIC_KEY: "your-wireguard-server-public-key"
+      WIREGUARD_SUBNET: "10.250.0.0/24"
+      PORTAL_DOMAIN: "wifi.majal.example.com"
       AFRICASTALKING_USERNAME: "sandbox"
       AFRICASTALKING_API_KEY: "your-africastalking-api-key"
       FRONTEND_URL: "http://localhost:3000"

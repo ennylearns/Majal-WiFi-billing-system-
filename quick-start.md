@@ -29,6 +29,7 @@ cd backend
 npm run db:push
 npm run db:seed
 ```
+> **Note:** If `MIKROTIK_HOST` is set in your `backend/.env`, the system automatically seeds a "Default Router" in the database during startup and binds existing seed plans to it. Additional routers can be added at any time via the Admin Dashboard.
 
 ### 3. Start Both Servers
 ```bash
@@ -38,14 +39,23 @@ node start-dev.js
 
 ## 🌐 Access Points
 
-- **Customer Portal**: http://localhost:3000
-- **Admin Dashboard**: http://localhost:3000/admin
+- **Customer Portal**: http://localhost:3000 (shows plans filtered by connected router)
+- **Admin Dashboard**: http://localhost:3000/admin (manage routers, plans, sessions, payments)
 - **Backend API**: http://localhost:5000/health
 
 ## 🔑 Default Admin Login
 
 - **Email**: admin@collospot.com
 - **Password**: admin123
+
+## 📡 Router Management
+
+1. Log into the **Admin Dashboard** (`/admin`).
+2. Navigate to **Routers** in the sidebar.
+3. Click **Add Router** to register physical MikroTik devices with friendly names, locations, and API credentials.
+4. Use **Test Connection** to verify API reachability.
+5. Click **Setup Script** to generate and copy the automated RouterOS v7 provisioning script into your router's Winbox Terminal.
+6. When creating or editing Plans under **Plans**, assign each plan to its designated router.
 
 ## 📋 Current Status
 

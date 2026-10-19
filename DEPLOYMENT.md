@@ -24,10 +24,22 @@ Edit `backend/.env` with your actual credentials:
 PAYSTACK_SECRET_KEY="your-paystack-secret-key"
 PAYSTACK_PUBLIC_KEY="your-paystack-public-key"
 
-# MikroTik Router
+# Captive Portal Domain
+PORTAL_DOMAIN="wifi.majal.example.com"
+
+# WireGuard Server Tunnel (CGNAT Traversal for Remote MikroTik Routers)
+WIREGUARD_INTERFACE="wg0"
+WIREGUARD_SERVER_ENDPOINT="vpn.example.com:51820"
+WIREGUARD_SERVER_PUBLIC_KEY="your-wireguard-server-public-key"
+WIREGUARD_SUBNET="10.250.0.0/24"
+
+# Legacy MikroTik Startup Seed (Optional)
+# NOTE: Only used for a one-time database seed on first run if no routers exist.
+# Active routers and credentials are managed directly in the Admin UI (/admin -> Routers).
 MIKROTIK_HOST="192.168.1.1"
 MIKROTIK_USERNAME="admin"
 MIKROTIK_PASSWORD="your-router-password"
+MIKROTIK_PORT="8728"
 
 # SMS Service
 AFRICASTALKING_API_KEY="your-api-key"
@@ -66,6 +78,9 @@ sudo apt install postgresql postgresql-contrib -y
 # Install Nginx
 sudo apt install nginx -y
 
+# Install WireGuard
+sudo apt install wireguard -y
+
 # Install PM2 for process management
 sudo npm install -g pm2
 ```
@@ -82,7 +97,54 @@ GRANT ALL PRIVILEGES ON DATABASE collospot_db TO collospot;
 \q
 ```
 
-### 3. Application Deployment
+### 3. WireGuard Server Setup (CGNAT Traversal)
+
+WireGuard enables the backend to communicate with remote MikroTik routers over private CGNAT or mobile LTE/5G connections using an internal VPN subnet (`10.250.0.0/24`).
+
+#### a. Enable IPv4 Forwarding
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.d/99-wireguard.conf
+```
+
+#### b. Generate Server WireGuard Keypair
+```bash
+sudo mkdir -p /etc/wireguard
+cd /etc/wireguard
+umask 077
+wg genkey | sudo tee server.key | wg pubkey | sudo tee server.pub
+```
+
+#### c. Create WireGuard Interface Configuration (`/etc/wireguard/wg0.conf`)
+Create `/etc/wireguard/wg0.conf`:
+```ini
+[Interface]
+Address = 10.250.0.1/24
+ListenPort = 51820
+PrivateKey = <INSERT_CONTENTS_OF_/etc/wireguard/server.key>
+SaveConfig = false
+```
+
+#### d. Start and Enable WireGuard Service
+```bash
+sudo systemctl enable wg-quick@wg0
+sudo systemctl start wg-quick@wg0
+```
+
+#### e. Firewall Rule
+Allow incoming WireGuard UDP traffic:
+```bash
+sudo ufw allow 51820/udp
+sudo ufw reload
+```
+
+#### f. Note Server WireGuard Parameters for Backend `.env`
+- **Server Public Key**: `sudo cat /etc/wireguard/server.pub`
+- **Server Endpoint**: `<your-server-domain-or-public-ip>:51820`
+
+When routers are added in the Admin Dashboard, the backend dynamically registers WireGuard peers into `wg0` via `wg set` commands.
+
+### 4. Application Deployment
 ```bash
 # Clone repository
 git clone <repository-url> /var/www/collospot
@@ -104,7 +166,7 @@ npm install
 npm run build
 ```
 
-### 4. PM2 Configuration
+### 5. PM2 Configuration
 Create `ecosystem.config.js`:
 ```javascript
 module.exports = {
@@ -129,7 +191,7 @@ pm2 save
 pm2 startup
 ```
 
-### 5. Nginx Configuration
+### 6. Nginx Configuration
 Create `/etc/nginx/sites-available/collospot`:
 ```nginx
 server {
@@ -173,35 +235,108 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 6. SSL Certificate (Let's Encrypt)
+### 7. SSL Certificate (Let's Encrypt)
 ```bash
 sudo apt install certbot python3-certbot-nginx -y
 sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 ```
 
-## 🔧 MikroTik Router Configuration
+## 🔧 MikroTik Multi-Router Provisioning & Operator Guide
 
-### 1. Enable API
-```bash
-/ip service enable api
-/ip service set api port=8728
-```
+The system supports managing arbitrary numbers of physical MikroTik routers (RouterOS v7) located across different branches, buildings, or ISP connections. 
 
-### 2. Create API User
-```bash
-/user add name=collospot password=secure-password group=full
-```
+### Why WireGuard CGNAT Traversal?
+Physical routers deployed on subscriber premises or LTE/5G SIMs often sit behind Carrier-Grade NAT (CGNAT) without public IP addresses. When a router is created in the Admin Dashboard, the backend:
+1. Automatically generates an X25519 WireGuard keypair for the router.
+2. Allocates a dedicated private IP on the tunnel subnet (e.g., `10.250.0.2/24`).
+3. Registers the peer with the server's `wg0` interface.
+4. With `persistent-keepalive=25s`, the router initiates and maintains an outbound UDP connection back to the Majal server, keeping stateful NAT firewalls open indefinitely.
 
-### 3. Hotspot Setup
-```bash
-# Create hotspot interface
-/interface bridge add name=hotspot-bridge
-/ip hotspot add name=collospot interface=hotspot-bridge
+---
 
-# Configure hotspot
-/ip hotspot profile add name=collospot-profile
-/ip hotspot user profile add name=default rate-limit=1M/5M session-timeout=1h
-```
+### Step 1: Register Router in Admin UI
+1. Navigate to the **Admin Dashboard** (`https://yourdomain.com/admin`) and select **Routers** in the sidebar.
+2. Click **Add Router**.
+3. Fill in:
+   - **Router Name**: Friendly name (e.g. `Downtown Cafe`, `Plaza Floor 2`)
+   - **Location**: Physical location description
+   - **Host / IP**: Leave as default allocated tunnel IP or internal hostname
+   - **Port**: `8728` (RouterOS API port)
+   - **API Username**: Dedicated API username (e.g. `billing-api`)
+   - **API Password**: Strong unique password
+4. Click **Save Router**.
+
+---
+
+### Step 2: Generate the Provisioning Script
+1. On the Routers table, click the **Setup Script** button on the newly created router.
+2. The modal generates an idempotent, customized RouterOS v7 script that configures:
+   - System identity name
+   - WireGuard client interface (`wg-majal`) with assigned private key and tunnel IP
+   - Server peer configuration with keepalive (`25s`) and endpoint
+   - API service enabled and locked strictly to `10.250.0.1/32`
+   - Dedicated `billing-api` user group and user credentials
+   - Hotspot walled garden entries for the portal domain and Paystack checkout
+   - Captive portal `hotspot/login.html` redirect passing `?routerId=<ID>&router=$(identity)`
+3. Click **Copy Script**.
+
+---
+
+### Step 3: Operator Guide — Pasting Script into Winbox Terminal
+
+Follow these steps on each physical MikroTik router to apply the provisioning configuration:
+
+1. **Connect with Winbox**:
+   - Download the official MikroTik **Winbox** utility from [mikrotik.com](https://mikrotik.com/download).
+   - Launch Winbox on a computer connected to the router's local network (LAN or Wi-Fi).
+   - In the **Neighbors** tab, locate your router and click on its MAC Address or IP.
+   - Enter your administrator credentials and click **Connect**.
+
+2. **Open New Terminal**:
+   - In the left sidebar navigation menu, click **New Terminal**.
+   - A command terminal window will open inside Winbox.
+
+3. **Paste Provisioning Script**:
+   - Right-click anywhere inside the terminal window and select **Paste** (or press `Ctrl + V` / right-click menu depending on Winbox version).
+   - Winbox will stream the commands line-by-line.
+   - **Press Enter** on your keyboard after pasting to execute the final block.
+
+4. **Verify Applied Configuration**:
+   Run the following verification commands in the Winbox Terminal:
+   ```routeros
+   # Check WireGuard interface state
+   /interface/wireguard print
+   
+   # Check tunnel IP assignment
+   /ip/address print where interface="wg-majal"
+   
+   # Check peer connection and handshake
+   /interface/wireguard/peers print
+   
+   # Check API service lockdown (should show address=10.250.0.1/32)
+   /ip/service print where name="api"
+   
+   # Check API user
+   /user print where name="billing-api"
+   
+   # Check Walled Garden domains
+   /ip/hotspot/walled-garden print
+   
+   # Check captive portal login redirect
+   /file print where name="hotspot/login.html"
+   ```
+
+5. **Test Connection in Admin UI**:
+   - Return to the **Admin Dashboard** (`/admin -> Routers`).
+   - Click **Test Connection** next to the router.
+   - A green notification confirming successful connection to the MikroTik API will be displayed.
+
+---
+
+### Step 4: Bind Plans to the Router
+1. Navigate to **Plans** in the Admin Dashboard.
+2. When creating new packages or editing existing packages, select the appropriate router from the **Router** dropdown.
+3. When customers at that physical location connect to the WiFi captive portal, the portal will automatically detect the router and display only the plans valid for that location.
 
 ## 📱 Paystack Integration Setup
 
