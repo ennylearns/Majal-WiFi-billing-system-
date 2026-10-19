@@ -471,5 +471,118 @@ describe('Admin Router Endpoints - Integration Tests', () => {
       await prisma.router.delete({ where: { id: router.id } });
     }
   });
+
+  // Slice 6: GET /api/admin/routers/:id/provision-script
+  test('GET /api/admin/routers/:id/provision-script returns 404 when router not found', async () => {
+    const res = await fetch(`${baseUrl}/routers/non-existent-id/provision-script`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.equal(res.status, 404);
+    const json = await res.json() as any;
+    assert.equal(json.success, false);
+    assert.equal(json.error, 'Router not found');
+  });
+
+  test('GET /api/admin/routers/:id/provision-script returns generated RouterOS script', async () => {
+    const router = await prisma.router.create({
+      data: {
+        name: 'Provisioned Router',
+        location: 'West Branch',
+        host: '10.250.0.8',
+        port: 8728,
+        username: 'router_west',
+        password: 'password_west',
+        wgPrivateKey: 'test_priv_key==',
+        wgPublicKey: 'test_pub_key==',
+        wgTunnelIp: '10.250.0.8'
+      }
+    });
+
+    try {
+      const res = await fetch(`${baseUrl}/routers/${router.id}/provision-script`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      assert.equal(res.status, 200);
+      const json = await res.json() as any;
+      assert.equal(json.success, true);
+      assert.ok(json.data && json.data.script);
+      assert.ok(json.data.script.includes('/system/identity set name="Provisioned Router"'));
+      assert.ok(json.data.script.includes('10.250.0.8/24'));
+      assert.ok(json.data.script.includes('router_west'));
+    } finally {
+      await prisma.router.delete({ where: { id: router.id } });
+    }
+  });
+
+  // Slice 7: Granular test-connection diagnostics
+  test('POST /api/admin/routers/:id/test-connection returns status tunnel_offline when WireGuard handshake is missing', async () => {
+    const router = await prisma.router.create({
+      data: {
+        name: 'Offline WG Router',
+        location: 'Remote',
+        host: '10.250.0.15',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+        wgPublicKey: 'offline_pub_key_123'
+      }
+    });
+
+    // Ensure mock handshake returns disconnected
+    wireguardService.setMockHandshake('offline_pub_key_123', null);
+
+    try {
+      const res = await fetch(`${baseUrl}/routers/${router.id}/test-connection`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+
+      assert.equal(res.status, 200);
+      const json = await res.json() as any;
+      assert.equal(json.success, false);
+      assert.equal(json.status, 'tunnel_offline');
+      assert.ok(json.error.includes('tunnel'));
+    } finally {
+      await prisma.router.delete({ where: { id: router.id } });
+    }
+  });
+
+  test('POST /api/admin/routers/:id/test-connection returns status auth_failed when API reports authentication error', async () => {
+    const router = await prisma.router.create({
+      data: {
+        name: 'Bad Auth Router',
+        location: 'HQ',
+        host: '10.250.0.16',
+        port: 8728,
+        username: 'admin',
+        password: 'badpassword',
+        wgPublicKey: 'bad_auth_pub_key'
+      }
+    });
+
+    // Handshake is active
+    wireguardService.setMockHandshake('bad_auth_pub_key', new Date());
+
+    const origConnect = RouterOSAPI.prototype.connect;
+    (RouterOSAPI.prototype as any).connect = async function () {
+      throw new Error('cannot log in: invalid user name or password');
+    };
+
+    try {
+      const res = await fetch(`${baseUrl}/routers/${router.id}/test-connection`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+
+      assert.equal(res.status, 200);
+      const json = await res.json() as any;
+      assert.equal(json.success, false);
+      assert.equal(json.status, 'auth_failed');
+    } finally {
+      RouterOSAPI.prototype.connect = origConnect;
+      await prisma.router.delete({ where: { id: router.id } });
+    }
+  });
 });
+
 

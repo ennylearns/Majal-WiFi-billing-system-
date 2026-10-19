@@ -4,15 +4,15 @@
 
 **Blocked by:** 11
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Implement `backend/src/services/provisioningScriptService.ts` to generate idempotent RouterOS v7 scripts
-- [ ] Configure WireGuard in script: creates interface `wg-majal`, assigns `wgTunnelIp/24`, adds server peer with `persistent-keepalive=25s` and server endpoint
-- [ ] Configure API service in script: enables port 8728 and restricts access strictly to server tunnel IP `10.250.0.1/32`
-- [ ] Configure API user and group in script: creates `billing-api` group with minimal required permissions and dedicated API user
-- [ ] Configure Walled Garden in script: allows unauthenticated traffic to `PORTAL_DOMAIN` and Paystack domains
-- [ ] Configure Hotspot `login.html` in script: redirects browser to `https://<PORTAL_DOMAIN>/?routerId=<ID>&router=$(identity)` and sets profile to `html-directory=hotspot`
-- [ ] Ensure all script commands are idempotent (safely re-runnable without duplicate resource errors)
-- [ ] Expose `GET /api/admin/routers/:id/provision-script` returning the script text
-- [ ] Update `POST /api/admin/routers/:id/test-connection` to query `wireguardService` for handshake status first, then test RouterOS API, returning diagnostic status (`online`, `tunnel_offline`, `auth_failed`, or `unreachable`)
-- [ ] Add unit and route tests in `backend/src/services/provisioningScriptService.test.ts` and `backend/src/routes/admin.routers.test.ts`
+- [x] Implement `backend/src/services/provisioningScriptService.ts` to generate idempotent RouterOS v7 scripts
+- [x] Configure WireGuard in script: creates interface `wg-majal`, assigns `wgTunnelIp/24`, adds server peer with `persistent-keepalive=25s` and server endpoint
+- [x] Configure API service in script: enables port 8728 and restricts access strictly to server tunnel IP `10.250.0.1/32`
+- [x] Configure API user and group in script: creates `billing-api` group with minimal required permissions and dedicated API user
+- [x] Configure Walled Garden in script: allows unauthenticated traffic to `PORTAL_DOMAIN` and Paystack domains
+- [x] Configure Hotspot `login.html` in script: redirects browser to `https://<PORTAL_DOMAIN>/?routerId=<ID>&router=$(identity)` and sets profile to `html-directory=hotspot`
+- [x] Ensure all script commands are idempotent (safely re-runnable without duplicate resource errors)
+- [x] Expose `GET /api/admin/routers/:id/provision-script` returning the script text
+- [x] Update `POST /api/admin/routers/:id/test-connection` to query `wireguardService` for handshake status first, then test RouterOS API, returning diagnostic status (`online`, `tunnel_offline`, `auth_failed`, or `unreachable`)
+- [x] Add unit and route tests in `backend/src/services/provisioningScriptService.test.ts` and `backend/src/routes/admin.routers.test.ts`
