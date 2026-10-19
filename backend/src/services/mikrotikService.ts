@@ -221,6 +221,4 @@ export class MikrotikService {
   formatSessionTimeout(hours: number): string {
     return `${hours * 3600}s`;
   }
-}
-
-export default new MikrotikService();
+}

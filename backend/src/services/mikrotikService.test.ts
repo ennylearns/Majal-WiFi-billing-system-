@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RouterOSAPI } from 'node-routeros';
-import defaultMikrotikService, { MikrotikService, MikrotikCredentials } from './mikrotikService';
+import { MikrotikService, MikrotikCredentials } from './mikrotikService';
 
 describe('MikrotikService - Constructor and Credentials', () => {
   const originalEnv = process.env;
@@ -59,16 +59,6 @@ describe('MikrotikService - Constructor and Credentials', () => {
     assert.equal(service.port, 9876);
     assert.equal(service.username, 'env-user');
     assert.equal(service.password, 'env-password');
-  });
-
-  test('existing default export singleton remains unchanged and usable', () => {
-    assert.ok(defaultMikrotikService instanceof MikrotikService);
-    assert.equal(typeof defaultMikrotikService.createHotspotUser, 'function');
-    assert.equal(typeof defaultMikrotikService.removeHotspotUser, 'function');
-    assert.equal(typeof defaultMikrotikService.getActiveUsers, 'function');
-    assert.equal(typeof defaultMikrotikService.disconnectUser, 'function');
-    assert.equal(typeof defaultMikrotikService.createUserProfile, 'function');
-    assert.equal(typeof defaultMikrotikService.updateUserProfile, 'function');
   });
 });
 

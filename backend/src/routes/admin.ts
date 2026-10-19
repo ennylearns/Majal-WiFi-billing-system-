@@ -2,7 +2,7 @@ import express, { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { body, validationResult } from 'express-validator';
-import mikrotikService, { MikrotikService } from '../services/mikrotikService';
+import { MikrotikService } from '../services/mikrotikService';
 import sessionService from '../services/sessionService';
 
 const router = express.Router();
@@ -356,17 +356,31 @@ router.get('/payments', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Get router status
-router.get('/router/status', async (req: AuthRequest, res: Response) => {
+// Get active users on a specific router
+router.get('/routers/:id/status', async (req: AuthRequest, res: Response) => {
   try {
-    const activeUsers = await mikrotikService.getActiveUsers();
-    
+    const { id } = req.params;
+
+    const routerRecord = await prisma.router.findUnique({ where: { id } });
+    if (!routerRecord) {
+      return res.status(404).json({ success: false, error: 'Router not found' });
+    }
+
+    const service = new MikrotikService({
+      host: routerRecord.host,
+      port: routerRecord.port,
+      username: routerRecord.username,
+      password: routerRecord.password,
+    });
+
+    const activeUsers = await service.getActiveUsers();
+
     res.json({
       success: true,
       data: {
         activeUsers: activeUsers.length,
-        users: activeUsers
-      }
+        users: activeUsers,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get router status' });
