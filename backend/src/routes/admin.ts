@@ -1,9 +1,11 @@
 import express, { Response } from 'express';
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { body, validationResult } from 'express-validator';
 import { MikrotikService } from '../services/mikrotikService';
 import sessionService from '../services/sessionService';
+import wireguardService from '../services/wireguardService';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -404,10 +406,7 @@ router.get('/routers', async (req: AuthRequest, res: Response) => {
 router.post('/routers', [
   body('name').notEmpty().withMessage('Router name is required'),
   body('location').notEmpty().withMessage('Location is required'),
-  body('host').notEmpty().withMessage('Host is required'),
-  body('port').optional().isInt({ min: 1, max: 65535 }).withMessage('Port must be a valid integer between 1 and 65535'),
-  body('username').notEmpty().withMessage('Username is required'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('port').optional().isInt({ min: 1, max: 65535 }).withMessage('Port must be a valid integer between 1 and 65535')
 ], async (req: AuthRequest, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -415,18 +414,41 @@ router.post('/routers', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { name, location, host, port, username, password } = req.body;
+    const { name, location, port } = req.body;
+
+    // Auto-generate API credentials if not supplied
+    const username: string = req.body.username || `router_${crypto.randomBytes(4).toString('hex')}`;
+    const password: string = req.body.password || crypto.randomBytes(16).toString('hex');
+
+    // Generate WireGuard keypair
+    const keyPair = wireguardService.generateKeyPair();
+
+    // Collect existing tunnel IPs to avoid collisions
+    const existingRouters = await prisma.router.findMany({
+      select: { wgTunnelIp: true }
+    });
+    const usedIps = existingRouters
+      .map((r) => r.wgTunnelIp)
+      .filter((ip): ip is string => ip !== null);
+
+    const tunnelIp = wireguardService.allocateTunnelIp(usedIps);
 
     const routerRecord = await prisma.router.create({
       data: {
         name,
         location,
-        host,
+        host: tunnelIp,
         port: port !== undefined ? Number(port) : 8728,
         username,
-        password
+        password,
+        wgPublicKey: keyPair.publicKey,
+        wgPrivateKey: keyPair.privateKey,
+        wgTunnelIp: tunnelIp
       }
     });
+
+    // Register peer with WireGuard
+    await wireguardService.addPeer(keyPair.publicKey, tunnelIp);
 
     res.status(201).json({ success: true, data: routerRecord });
   } catch (error) {
@@ -505,6 +527,11 @@ router.delete('/routers/:id', async (req: AuthRequest, res: Response) => {
         message: 'Router deactivated successfully',
         data: updatedRouter
       });
+    }
+
+    // Unregister WireGuard peer before deleting
+    if (routerRecord.wgPublicKey) {
+      await wireguardService.removePeer(routerRecord.wgPublicKey);
     }
 
     await prisma.router.delete({ where: { id } });

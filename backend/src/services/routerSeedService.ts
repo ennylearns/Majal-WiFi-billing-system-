@@ -1,4 +1,5 @@
 import { PrismaClient, Router } from '@prisma/client';
+import wireguardService from './wireguardService';
 
 export interface SeedRouterEnv {
   MIKROTIK_HOST?: string;
@@ -29,15 +30,40 @@ export async function seedDefaultRouter(
   const username = env.MIKROTIK_USERNAME || env.MIKROTIK_USER || 'admin';
   const password = env.MIKROTIK_PASSWORD || '';
 
+  // Generate WireGuard keypair and allocate a tunnel IP for the seeded router
+  let wgPublicKey: string | undefined;
+  let wgPrivateKey: string | undefined;
+  let wgTunnelIp: string | undefined;
+  let routerHost = host;
+
+  try {
+    const keyPair = wireguardService.generateKeyPair();
+    const tunnelIp = wireguardService.allocateTunnelIp([]);
+    wgPublicKey = keyPair.publicKey;
+    wgPrivateKey = keyPair.privateKey;
+    wgTunnelIp = tunnelIp;
+    routerHost = tunnelIp;
+
+    // Register peer asynchronously; failure is non-fatal for seeding
+    wireguardService.addPeer(keyPair.publicKey, tunnelIp).catch((err: unknown) => {
+      console.warn('[routerSeedService] WireGuard peer registration failed (non-fatal):', err);
+    });
+  } catch (err) {
+    console.warn('[routerSeedService] WireGuard provisioning skipped (non-fatal):', err);
+  }
+
   const router = await prismaClient.router.create({
     data: {
       name: 'Default Router',
       location: 'Main Location',
-      host,
+      host: routerHost,
       port,
       username,
       password,
-      isActive: true
+      isActive: true,
+      wgPublicKey: wgPublicKey ?? null,
+      wgPrivateKey: wgPrivateKey ?? null,
+      wgTunnelIp: wgTunnelIp ?? null
     }
   });
 

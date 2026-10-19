@@ -62,20 +62,28 @@ describe('routerSeedService - seedDefaultRouter', () => {
 
     assert.ok(result);
     assert.equal(result.id, 'seeded-router-1');
-    assert.deepEqual(routerCreatedData, {
-      name: 'Default Router',
-      location: 'Main Location',
-      host: '192.168.88.1',
-      port: 8729,
-      username: 'admin_test',
-      password: 'secretpassword',
-      isActive: true
-    });
+
+    // Static fields
+    assert.equal(routerCreatedData.name, 'Default Router');
+    assert.equal(routerCreatedData.location, 'Main Location');
+    assert.equal(routerCreatedData.port, 8729);
+    assert.equal(routerCreatedData.username, 'admin_test');
+    assert.equal(routerCreatedData.password, 'secretpassword');
+    assert.equal(routerCreatedData.isActive, true);
+
+    // WireGuard fields — generated at runtime so we just verify shape
+    assert.ok(routerCreatedData.wgPublicKey, 'wgPublicKey should be set');
+    assert.ok(routerCreatedData.wgPrivateKey, 'wgPrivateKey should be set');
+    assert.ok(routerCreatedData.wgTunnelIp, 'wgTunnelIp should be set');
+    // host should be the allocated tunnel IP, not the original MIKROTIK_HOST
+    assert.equal(routerCreatedData.host, routerCreatedData.wgTunnelIp, 'host should equal wgTunnelIp');
+
     assert.deepEqual(updateManyArgs, {
       where: { routerId: null },
       data: { routerId: 'seeded-router-1' }
     });
   });
+
 
   test('defaults port to 8728, name to "Default Router", location to "Main Location", and user to "admin" when optional env vars missing', async () => {
     mockEnv = {

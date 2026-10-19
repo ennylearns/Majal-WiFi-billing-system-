@@ -35,6 +35,9 @@ model Router {
   username    String
   password    String
   isActive    Boolean  @default(true)
+  wgPublicKey  String?
+  wgPrivateKey String?
+  wgTunnelIp   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

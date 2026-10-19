@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { RouterOSAPI } from 'node-routeros';
 import adminRoutes from './admin';
+import wireguardService from '../services/wireguardService';
 
 const prisma = new PrismaClient();
 
@@ -117,7 +118,7 @@ describe('Admin Router Endpoints - Integration Tests', () => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`
       },
-      body: JSON.stringify({ name: 'Incomplete Router' })
+      body: JSON.stringify({ location: 'Missing name field' })
     });
     assert.equal(res.status, 400);
     const json = await res.json() as any;
@@ -125,39 +126,82 @@ describe('Admin Router Endpoints - Integration Tests', () => {
     assert.ok(json.errors && json.errors.length > 0);
   });
 
-  test('POST /api/admin/routers creates a router with validated fields and returns 201', async () => {
-    const newRouter = {
-      name: 'Branch New Router',
-      location: 'Downtown Office',
-      host: '10.0.1.1',
-      port: 8729,
-      username: 'mikrotik_admin',
-      password: 'supersecretpassword'
+  test('POST /api/admin/routers auto-generates WireGuard keys, tunnel IP, host, and credentials', async () => {
+    // Track addPeer calls
+    const addPeerCalls: Array<{ publicKey: string; tunnelIp: string }> = [];
+    const origAddPeer = wireguardService.addPeer.bind(wireguardService);
+    (wireguardService as any).addPeer = async (publicKey: string, tunnelIp: string) => {
+      addPeerCalls.push({ publicKey, tunnelIp });
     };
 
-    const res = await fetch(`${baseUrl}/routers`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`
-      },
-      body: JSON.stringify(newRouter)
-    });
+    try {
+      const res = await fetch(`${baseUrl}/routers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ name: 'Branch New Router', location: 'Downtown Office' })
+      });
 
-    assert.equal(res.status, 201);
-    const json = await res.json() as any;
-    assert.equal(json.success, true);
-    assert.equal(json.data.name, newRouter.name);
-    assert.equal(json.data.location, newRouter.location);
-    assert.equal(json.data.host, newRouter.host);
-    assert.equal(json.data.port, newRouter.port);
-    assert.equal(json.data.username, newRouter.username);
-    assert.equal(json.data.password, newRouter.password);
-    assert.equal(json.data.isActive, true);
-    assert.ok(json.data.id);
+      assert.equal(res.status, 201);
+      const json = await res.json() as any;
+      assert.equal(json.success, true);
+      assert.equal(json.data.name, 'Branch New Router');
+      assert.equal(json.data.location, 'Downtown Office');
+      assert.equal(json.data.isActive, true);
+      assert.ok(json.data.id);
 
-    // Clean up
-    await prisma.router.delete({ where: { id: json.data.id } });
+      // Auto-generated WireGuard fields
+      assert.ok(json.data.wgPublicKey, 'wgPublicKey should be set');
+      assert.ok(json.data.wgPrivateKey, 'wgPrivateKey should be set');
+      assert.ok(json.data.wgTunnelIp, 'wgTunnelIp should be set');
+      assert.equal(json.data.host, json.data.wgTunnelIp, 'host should equal tunnelIp');
+
+      // Auto-generated credentials
+      assert.ok(json.data.username, 'username should be auto-generated');
+      assert.ok(json.data.password, 'password should be auto-generated');
+
+      // addPeer was called with the router's public key and tunnel IP
+      assert.equal(addPeerCalls.length, 1);
+      assert.equal(addPeerCalls[0].publicKey, json.data.wgPublicKey);
+      assert.equal(addPeerCalls[0].tunnelIp, json.data.wgTunnelIp);
+
+      // Clean up
+      await prisma.router.delete({ where: { id: json.data.id } });
+    } finally {
+      (wireguardService as any).addPeer = origAddPeer;
+    }
+  });
+
+  test('POST /api/admin/routers uses supplied username and password when provided', async () => {
+    const origAddPeer = wireguardService.addPeer.bind(wireguardService);
+    (wireguardService as any).addPeer = async () => {};
+
+    try {
+      const res = await fetch(`${baseUrl}/routers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          name: 'Custom Creds Router',
+          location: 'HQ',
+          username: 'my_admin',
+          password: 'my_secret'
+        })
+      });
+
+      assert.equal(res.status, 201);
+      const json = await res.json() as any;
+      assert.equal(json.data.username, 'my_admin');
+      assert.equal(json.data.password, 'my_secret');
+
+      await prisma.router.delete({ where: { id: json.data.id } });
+    } finally {
+      (wireguardService as any).addPeer = origAddPeer;
+    }
   });
 
   // Slice 3: PUT /api/admin/routers/:id
@@ -233,33 +277,48 @@ describe('Admin Router Endpoints - Integration Tests', () => {
     assert.equal(json.error, 'Router not found');
   });
 
-  test('DELETE /api/admin/routers/:id hard-deletes the router when no active sessions reference it', async () => {
-    const router = await prisma.router.create({
-      data: {
-        name: 'Deletable Router',
-        location: 'Branch C',
-        host: '10.20.30.1',
-        port: 8728,
-        username: 'admin',
-        password: 'password'
-      }
-    });
+  test('DELETE /api/admin/routers/:id hard-deletes the router and unregisters WireGuard peer when no active sessions reference it', async () => {
+    // Track removePeer calls
+    const removePeerCalls: string[] = [];
+    const origRemovePeer = wireguardService.removePeer.bind(wireguardService);
+    (wireguardService as any).removePeer = async (publicKey: string) => {
+      removePeerCalls.push(publicKey);
+    };
+    const origAddPeer = wireguardService.addPeer.bind(wireguardService);
+    (wireguardService as any).addPeer = async () => {};
 
-    const res = await fetch(`${baseUrl}/routers/${router.id}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${adminToken}`
-      }
-    });
+    try {
+      // Create router via API so it has WG fields
+      const createRes = await fetch(`${baseUrl}/routers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ name: 'Deletable Router', location: 'Branch C' })
+      });
+      const createJson = await createRes.json() as any;
+      const routerId = createJson.data.id;
+      const routerPubKey = createJson.data.wgPublicKey;
 
-    assert.equal(res.status, 200);
-    const json = await res.json() as any;
-    assert.equal(json.success, true);
-    assert.equal(json.message, 'Router deleted successfully');
+      const res = await fetch(`${baseUrl}/routers/${routerId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
 
-    // Confirm it is deleted from DB
-    const found = await prisma.router.findUnique({ where: { id: router.id } });
-    assert.equal(found, null);
+      assert.equal(res.status, 200);
+      const json = await res.json() as any;
+      assert.equal(json.success, true);
+      assert.equal(json.message, 'Router deleted successfully');
+
+      // Confirm it is deleted from DB
+      const found = await prisma.router.findUnique({ where: { id: routerId } });
+      assert.equal(found, null);
+
+      // WireGuard peer was unregistered
+      assert.equal(removePeerCalls.length, 1);
+      assert.equal(removePeerCalls[0], routerPubKey);
+    } finally {
+      (wireguardService as any).removePeer = origRemovePeer;
+      (wireguardService as any).addPeer = origAddPeer;
+    }
   });
 
   test('DELETE /api/admin/routers/:id soft-deletes the router when active sessions reference it', async () => {
