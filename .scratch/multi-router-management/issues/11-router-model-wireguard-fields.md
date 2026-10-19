@@ -4,16 +4,16 @@
 
 **Blocked by:** 10
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Update `prisma/schema.prisma` `Router` model with `wgPublicKey String?`, `wgPrivateKey String?`, `wgTunnelIp String?`
-- [ ] Run migration to apply schema update
-- [ ] Update `POST /api/admin/routers` handler to:
+- [x] Update `prisma/schema.prisma` `Router` model with `wgPublicKey String?`, `wgPrivateKey String?`, `wgTunnelIp String?`
+- [x] Run migration to apply schema update
+- [x] Update `POST /api/admin/routers` handler to:
   - Require only `name` and `location` in payload
   - Auto-generate secure API username/password if omitted
   - Generate WireGuard keypair and allocate next available tunnel IP via `wireguardService`
   - Set `host` to the allocated tunnel IP
   - Persist router with tunnel fields and register peer via `wireguardService.addPeer`
-- [ ] Update `DELETE /api/admin/routers/:id` handler to call `wireguardService.removePeer(router.wgPublicKey)`
-- [ ] Update existing router seed logic (`routerSeedService.ts`) to handle or migrate WireGuard fields cleanly
-- [ ] Update admin router tests in `backend/src/routes/admin.routers.test.ts` to verify auto-generation of credentials, tunnel allocation, and peer registration
+- [x] Update `DELETE /api/admin/routers/:id` handler to call `wireguardService.removePeer(router.wgPublicKey)`
+- [x] Update existing router seed logic (`routerSeedService.ts`) to handle or migrate WireGuard fields cleanly
+- [x] Update admin router tests in `backend/src/routes/admin.routers.test.ts` to verify auto-generation of credentials, tunnel allocation, and peer registration
