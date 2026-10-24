@@ -192,6 +192,10 @@ export class PaystackService {
       }
 
       if (payment) {
+        if (payment.status === 'COMPLETED') {
+          return;
+        }
+
         await this.prisma.payment.update({
           where: { id: payment.id },
           data: {
@@ -210,19 +214,7 @@ export class PaystackService {
 
         if (!existingSession) {
           const sessionToken = this.generateSessionToken();
-          const durationHours = payment.plan?.duration || 1;
-          const endTime = new Date();
-          endTime.setHours(endTime.getHours() + durationHours);
-
-          await this.prisma.session.create({
-            data: {
-              userId: payment.userId,
-              planId: payment.planId,
-              sessionToken,
-              endTime,
-              status: 'ACTIVE'
-            }
-          });
+          await this.sessionService.createSession(payment.userId, payment.planId, sessionToken);
         }
       }
     }

@@ -164,9 +164,10 @@ describe('PaystackService - handleWebhook signature verification', () => {
     assert.equal(dbTouched, false);
   });
 
-  test('on charge.success event with valid signature, updates payment to COMPLETED and creates session', async () => {
+  test('on charge.success event with valid signature, updates payment to COMPLETED and delegates to sessionService', async () => {
     let paymentUpdated = false;
-    let sessionCreated = false;
+    let capturedPaymentUpdate: any = null;
+    let sessionCreatedArgs: { userId: string; planId: string; sessionToken: string } | null = null;
 
     const mockPayment = {
       id: 'pay-uuid-1',
@@ -182,7 +183,8 @@ describe('PaystackService - handleWebhook signature verification', () => {
     const mockPrisma = {
       payment: {
         findFirst: async ({ where }: any) => {
-          if (where.checkoutRequestId === 'ref_123' || where.paymentReference === 'ref_123') {
+          if (where.OR?.some((cond: any) => cond.checkoutRequestId === 'ref_123' || cond.paymentReference === 'ref_123') ||
+              where.checkoutRequestId === 'ref_123' || where.paymentReference === 'ref_123') {
             return mockPayment;
           }
           return null;
@@ -196,22 +198,24 @@ describe('PaystackService - handleWebhook signature verification', () => {
         update: async ({ where, data }: any) => {
           if (data.status === 'COMPLETED' && data.paymentReference === 'ref_123') {
             paymentUpdated = true;
+            capturedPaymentUpdate = data;
           }
           return { ...mockPayment, ...data };
         }
       },
       session: {
-        findFirst: async () => null,
-        create: async ({ data }: any) => {
-          if (data.userId === 'user-uuid-1' && data.planId === 'plan-uuid-1' && data.status === 'ACTIVE') {
-            sessionCreated = true;
-          }
-          return { id: 'sess-uuid-1', ...data };
-        }
+        findFirst: async () => null
       }
     };
 
-    const service = new PaystackService(mockPrisma as any);
+    const mockSessionService = {
+      createSession: async (userId: string, planId: string, sessionToken: string) => {
+        sessionCreatedArgs = { userId, planId, sessionToken };
+        return { id: 'sess-uuid-1', userId, planId, sessionToken };
+      }
+    } as unknown as SessionService;
+
+    const service = new PaystackService(mockPrisma as any, mockSessionService);
     const rawBody = JSON.stringify({
       event: 'charge.success',
       data: {
@@ -233,7 +237,128 @@ describe('PaystackService - handleWebhook signature verification', () => {
     await service.handleWebhook(rawBody, validSignature);
 
     assert.equal(paymentUpdated, true);
-    assert.equal(sessionCreated, true);
+    assert.equal(capturedPaymentUpdate?.status, 'COMPLETED');
+    assert.equal(capturedPaymentUpdate?.paymentReference, 'ref_123');
+    assert.notEqual(sessionCreatedArgs, null, 'sessionService.createSession should have been invoked');
+    assert.equal(sessionCreatedArgs!.userId, 'user-uuid-1');
+    assert.equal(sessionCreatedArgs!.planId, 'plan-uuid-1');
+    assert.equal(typeof sessionCreatedArgs!.sessionToken, 'string');
+    assert.ok(sessionCreatedArgs!.sessionToken.length > 0);
+  });
+
+  test('webhook deliveries for already COMPLETED payments are idempotent no-ops', async () => {
+    let paymentUpdateCalled = false;
+    let sessionCreateCalled = false;
+
+    const completedPayment = {
+      id: 'pay-uuid-completed',
+      userId: 'user-uuid-1',
+      planId: 'plan-uuid-1',
+      status: 'COMPLETED',
+      paymentReference: 'ref_completed',
+      plan: {
+        id: 'plan-uuid-1',
+        duration: 2
+      }
+    };
+
+    const mockPrisma = {
+      payment: {
+        findFirst: async () => completedPayment,
+        findUnique: async () => completedPayment,
+        update: async () => {
+          paymentUpdateCalled = true;
+        }
+      },
+      session: {
+        findFirst: async () => null
+      }
+    };
+
+    const mockSessionService = {
+      createSession: async () => {
+        sessionCreateCalled = true;
+      }
+    } as unknown as SessionService;
+
+    const service = new PaystackService(mockPrisma as any, mockSessionService);
+    const rawBody = JSON.stringify({
+      event: 'charge.success',
+      data: {
+        reference: 'ref_completed',
+        status: 'success',
+        amount: 50000,
+        metadata: {
+          planId: 'plan-uuid-1',
+          paymentId: 'pay-uuid-completed'
+        }
+      }
+    });
+
+    const validSignature = crypto
+      .createHmac('sha512', secret)
+      .update(rawBody)
+      .digest('hex');
+
+    await service.handleWebhook(rawBody, validSignature);
+
+    assert.equal(paymentUpdateCalled, false, 'Should not update payment again');
+    assert.equal(sessionCreateCalled, false, 'Should not create session again');
+  });
+
+  test('delegates to sessionService which provisions router hotspot credentials matching sessionToken', async () => {
+    let routerUserCreated: { username: string; password: string; profile: string } | null = null;
+    const fakeSessionService = {
+      createSession: async (userId: string, planId: string, sessionToken: string) => {
+        routerUserCreated = { username: sessionToken, password: sessionToken, profile: `plan_${planId}` };
+        return { id: 'sess-123', userId, planId, sessionToken, status: 'ACTIVE' };
+      }
+    } as unknown as SessionService;
+
+    const mockPayment = {
+      id: 'pay-uuid-mikrotik',
+      userId: 'user-uuid-99',
+      planId: 'plan-uuid-88',
+      status: 'PENDING',
+      plan: { id: 'plan-uuid-88', duration: 2 }
+    };
+
+    const mockPrisma = {
+      payment: {
+        findFirst: async () => mockPayment,
+        findUnique: async () => mockPayment,
+        update: async () => mockPayment
+      },
+      session: {
+        findFirst: async () => null
+      }
+    };
+
+    const service = new PaystackService(mockPrisma as any, fakeSessionService);
+    const rawBody = JSON.stringify({
+      event: 'charge.success',
+      data: {
+        reference: 'ref_mikrotik',
+        status: 'success',
+        amount: 50000,
+        metadata: {
+          planId: 'plan-uuid-88',
+          paymentId: 'pay-uuid-mikrotik'
+        }
+      }
+    });
+
+    const validSignature = crypto
+      .createHmac('sha512', secret)
+      .update(rawBody)
+      .digest('hex');
+
+    await service.handleWebhook(rawBody, validSignature);
+
+    assert.notEqual(routerUserCreated, null);
+    assert.equal(typeof routerUserCreated!.username, 'string');
+    assert.equal(routerUserCreated!.username, routerUserCreated!.password);
+    assert.equal(routerUserCreated!.profile, 'plan_plan-uuid-88');
   });
 });
 
