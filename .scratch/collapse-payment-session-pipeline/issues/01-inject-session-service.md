@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The payment service accepts an optional session service instance in its constructor.
-- [ ] When no session service instance is passed, the payment service defaults to the standard singleton instance.
-- [ ] Existing unit tests instantiate the payment service without errors or behavioral regressions.
-- [ ] A unit test verifies that custom session service mock instances are accepted and retained.
+- [x] The payment service accepts an optional session service instance in its constructor.
+- [x] When no session service instance is passed, the payment service defaults to the standard singleton instance.
+- [x] Existing unit tests instantiate the payment service without errors or behavioral regressions.
+- [x] A unit test verifies that custom session service mock instances are accepted and retained.

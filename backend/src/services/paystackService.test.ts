@@ -1,6 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import paystackService, { PaystackService } from './paystackService';
+import sessionService, { SessionService } from './sessionService';
 
 describe('PaystackService - initiateTransaction', () => {
   const originalEnv = process.env;
@@ -269,6 +270,30 @@ describe('PaystackService - dev-mode stub', () => {
     assert.ok(result.access_code.startsWith('mock_code_'));
   });
 });
+
+describe('PaystackService - SessionService dependency injection', () => {
+  test('defaults to default sessionService singleton when omitted from constructor', () => {
+    const service = new PaystackService();
+    assert.equal(service.sessionService, sessionService);
+  });
+
+  test('defaults to default sessionService singleton when only prismaClient is provided', () => {
+    const mockPrisma = {} as any;
+    const service = new PaystackService(mockPrisma);
+    assert.equal(service.sessionService, sessionService);
+  });
+
+  test('accepts and retains custom sessionService mock instance in constructor', () => {
+    const mockSessionService = {
+      createSession: async () => ({ id: 'mock-session-id' }),
+      extendSession: async () => ({ id: 'mock-extended-id' })
+    } as unknown as SessionService;
+
+    const service = new PaystackService(undefined, mockSessionService);
+    assert.equal(service.sessionService, mockSessionService);
+  });
+});
+
 
 
 

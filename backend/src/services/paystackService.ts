@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import sessionService, { SessionService } from './sessionService';
 
 export interface InitiateTransactionResponse {
   reference: string;
@@ -14,9 +15,11 @@ export interface VerifyTransactionResponse {
 export class PaystackService {
   private baseURL = 'https://api.paystack.co';
   private prisma: PrismaClient;
+  public sessionService: SessionService;
 
-  constructor(prismaClient?: PrismaClient) {
+  constructor(prismaClient?: PrismaClient, sessionServiceInstance?: SessionService) {
     this.prisma = prismaClient || new PrismaClient();
+    this.sessionService = sessionServiceInstance || sessionService;
   }
 
   private get secretKey(): string {
