@@ -6,10 +6,10 @@
 
 **Status:** ready-for-agent
 
-- [ ] The router service provides constructor dependency injection for database and WireGuard dependencies, defaulting to standard singletons when omitted.
-- [ ] Creating a router automatically generates API credentials, creates a WireGuard keypair, allocates an available tunnel IP, stores the record, and registers the WireGuard peer.
-- [ ] If WireGuard peer registration fails during router creation, the created database record is rolled back and an error is thrown.
-- [ ] Router listing, single router retrieval, and updating operations are supported by the router service.
-- [ ] The administrator router creation, listing, retrieval, and update route handlers delegate to the router service.
-- [ ] Unit tests verify router creation happy path, compensating rollback on WireGuard failure, and router retrieval/updates using mock dependencies.
-- [ ] Existing administrator router integration tests for creation, listing, and updates continue to pass.
+- [x] The router service provides constructor dependency injection for database and WireGuard dependencies, defaulting to standard singletons when omitted.
+- [x] Creating a router automatically generates API credentials, creates a WireGuard keypair, allocates an available tunnel IP, stores the record, and registers the WireGuard peer.
+- [x] If WireGuard peer registration fails during router creation, the created database record is rolled back and an error is thrown.
+- [x] Router listing, single router retrieval, and updating operations are supported by the router service.
+- [x] The administrator router creation, listing, retrieval, and update route handlers delegate to the router service.
+- [x] Unit tests verify router creation happy path, compensating rollback on WireGuard failure, and router retrieval/updates using mock dependencies.
+- [x] Existing administrator router integration tests for creation, listing, and updates continue to pass.

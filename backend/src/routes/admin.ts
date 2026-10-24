@@ -6,6 +6,7 @@ import { body, validationResult } from 'express-validator';
 import { MikrotikService } from '../services/mikrotikService';
 import sessionService from '../services/sessionService';
 import wireguardService from '../services/wireguardService';
+import routerService from '../services/routerService';
 import { generateProvisioningScript } from '../services/provisioningScriptService';
 
 const router = express.Router();
@@ -393,13 +394,24 @@ router.get('/routers/:id/status', async (req: AuthRequest, res: Response) => {
 // Get all routers
 router.get('/routers', async (req: AuthRequest, res: Response) => {
   try {
-    const routers = await prisma.router.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-
+    const routers = await routerService.listRouters();
     res.json({ success: true, data: routers });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get routers' });
+  }
+});
+
+// Get single router
+router.get('/routers/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const routerRecord = await routerService.getRouterById(id);
+    if (!routerRecord) {
+      return res.status(404).json({ success: false, error: 'Router not found' });
+    }
+    res.json({ success: true, data: routerRecord });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get router' });
   }
 });
 
@@ -415,41 +427,16 @@ router.post('/routers', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { name, location, port } = req.body;
+    const { name, location, port, username, password, host } = req.body;
 
-    // Auto-generate API credentials if not supplied
-    const username: string = req.body.username || `router_${crypto.randomBytes(4).toString('hex')}`;
-    const password: string = req.body.password || crypto.randomBytes(16).toString('hex');
-
-    // Generate WireGuard keypair
-    const keyPair = wireguardService.generateKeyPair();
-
-    // Collect existing tunnel IPs to avoid collisions
-    const existingRouters = await prisma.router.findMany({
-      select: { wgTunnelIp: true }
+    const routerRecord = await routerService.createRouter({
+      name,
+      location,
+      port,
+      username,
+      password,
+      host
     });
-    const usedIps = existingRouters
-      .map((r) => r.wgTunnelIp)
-      .filter((ip): ip is string => ip !== null);
-
-    const tunnelIp = wireguardService.allocateTunnelIp(usedIps);
-
-    const routerRecord = await prisma.router.create({
-      data: {
-        name,
-        location,
-        host: tunnelIp,
-        port: port !== undefined ? Number(port) : 8728,
-        username,
-        password,
-        wgPublicKey: keyPair.publicKey,
-        wgPrivateKey: keyPair.privateKey,
-        wgTunnelIp: tunnelIp
-      }
-    });
-
-    // Register peer with WireGuard
-    await wireguardService.addPeer(keyPair.publicKey, tunnelIp);
 
     res.status(201).json({ success: true, data: routerRecord });
   } catch (error) {
@@ -474,27 +461,26 @@ router.put('/routers/:id', [
     }
 
     const { id } = req.params;
-    const existingRouter = await prisma.router.findUnique({ where: { id } });
-    if (!existingRouter) {
-      return res.status(404).json({ success: false, error: 'Router not found' });
-    }
-
     const { name, location, host, port, username, password, isActive } = req.body;
-    const updateData: any = {};
-    if (name !== undefined) updateData.name = name;
-    if (location !== undefined) updateData.location = location;
-    if (host !== undefined) updateData.host = host;
-    if (port !== undefined) updateData.port = Number(port);
-    if (username !== undefined) updateData.username = username;
-    if (password !== undefined) updateData.password = password;
-    if (isActive !== undefined) updateData.isActive = isActive;
 
-    const updatedRouter = await prisma.router.update({
-      where: { id },
-      data: updateData
-    });
+    try {
+      const updatedRouter = await routerService.updateRouter(id, {
+        name,
+        location,
+        host,
+        port,
+        username,
+        password,
+        isActive
+      });
 
-    res.json({ success: true, data: updatedRouter });
+      res.json({ success: true, data: updatedRouter });
+    } catch (err: any) {
+      if (err.message === 'Router not found') {
+        return res.status(404).json({ success: false, error: 'Router not found' });
+      }
+      throw err;
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to update router' });
   }
