@@ -2,6 +2,10 @@ import crypto from 'crypto';
 import { PrismaClient, Router } from '@prisma/client';
 import wireguardService, { WireguardService } from './wireguardService';
 
+export type DeleteRouterResult =
+  | { outcome: 'deactivated'; router: Router }
+  | { outcome: 'deleted' };
+
 export interface CreateRouterInput {
   name: string;
   location: string;
@@ -117,6 +121,40 @@ export class RouterService {
       where: { id },
       data: updateData,
     });
+  }
+
+  /**
+   * Delete a router safely.
+   * - If the router does not exist, throws a descriptive not-found error.
+   * - If there are active sessions referencing this router, the router is
+   *   deactivated (isActive → false) and the DB record is preserved.
+   * - If no active sessions exist, the WireGuard peer is unregistered (when
+   *   a public key is set) and the DB record is hard-deleted.
+   */
+  async deleteRouter(id: string): Promise<DeleteRouterResult> {
+    const existingRouter = await this.prisma.router.findUnique({ where: { id } });
+    if (!existingRouter) {
+      throw new Error(`Router not found: ${id}`);
+    }
+
+    const activeSessionsCount = await this.prisma.session.count({
+      where: { routerId: id, status: 'ACTIVE' },
+    });
+
+    if (activeSessionsCount > 0) {
+      const router = await this.prisma.router.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      return { outcome: 'deactivated', router };
+    }
+
+    if (existingRouter.wgPublicKey) {
+      await this.wireguard.removePeer(existingRouter.wgPublicKey);
+    }
+
+    await this.prisma.router.delete({ where: { id } });
+    return { outcome: 'deleted' };
   }
 }
 

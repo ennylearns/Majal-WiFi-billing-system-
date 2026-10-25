@@ -1,6 +1,6 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { RouterService, CreateRouterInput, UpdateRouterInput } from './routerService';
+import { RouterService, CreateRouterInput, UpdateRouterInput, DeleteRouterResult } from './routerService';
 import { WireguardService } from './wireguardService';
 
 describe('RouterService - Foundation, CRUD and Rollback', () => {
@@ -17,6 +17,9 @@ describe('RouterService - Foundation, CRUD and Rollback', () => {
         update: async () => ({}),
         delete: async () => ({}),
       },
+      session: {
+        count: async () => 0,
+      },
     };
 
     mockWireguard = {
@@ -26,6 +29,7 @@ describe('RouterService - Foundation, CRUD and Rollback', () => {
       }),
       allocateTunnelIp: () => '10.8.0.2',
       addPeer: async () => {},
+      removePeer: async () => {},
     };
 
     service = new RouterService(mockPrisma, mockWireguard);
@@ -195,6 +199,91 @@ describe('RouterService - Foundation, CRUD and Rollback', () => {
       'Should delete created router record on failure'
     );
   });
-});
 
+  // ── deleteRouter ─────────────────────────────────────────────────────────────
+
+  test('deleteRouter throws descriptive error when router does not exist', async () => {
+    mockPrisma.router.findUnique = async () => null;
+
+    await assert.rejects(
+      async () => {
+        await service.deleteRouter('ghost-id');
+      },
+      { message: 'Router not found: ghost-id' }
+    );
+  });
+
+  test('deleteRouter deactivates router and returns outcome deactivated when active sessions exist', async () => {
+    const existingRouter = {
+      id: 'r-active',
+      wgPublicKey: 'somePubKey=',
+      isActive: true,
+    };
+    mockPrisma.router.findUnique = async () => existingRouter;
+    mockPrisma.session.count = async () => 2;
+
+    let updatedData: any;
+    const deactivatedRouter = { ...existingRouter, isActive: false };
+    mockPrisma.router.update = async ({ data }: any) => {
+      updatedData = data;
+      return deactivatedRouter;
+    };
+
+    let removePeerCalled = false;
+    mockWireguard.removePeer = async () => { removePeerCalled = true; };
+
+    const result = await service.deleteRouter('r-active') as Extract<DeleteRouterResult, { outcome: 'deactivated' }>;
+
+    assert.equal(result.outcome, 'deactivated');
+    assert.deepEqual(result.router, deactivatedRouter);
+    assert.equal(updatedData.isActive, false, 'router should be set inactive');
+    assert.equal(removePeerCalled, false, 'WireGuard peer must NOT be removed on deactivation');
+  });
+
+  test('deleteRouter hard-deletes router and unregisters WireGuard peer when no active sessions exist', async () => {
+    const existingRouter = {
+      id: 'r-idle',
+      wgPublicKey: 'idlePubKey=',
+      isActive: true,
+    };
+    mockPrisma.router.findUnique = async () => existingRouter;
+    mockPrisma.session.count = async () => 0;
+
+    let deletedId: string | null = null;
+    mockPrisma.router.delete = async ({ where }: any) => {
+      deletedId = where.id;
+      return { id: where.id };
+    };
+
+    let removedKey: string | null = null;
+    mockWireguard.removePeer = async (key: string) => { removedKey = key; };
+
+    const result = await service.deleteRouter('r-idle');
+
+    assert.equal(result.outcome, 'deleted');
+    assert.equal(deletedId, 'r-idle', 'DB record should be hard-deleted');
+    assert.equal(removedKey, 'idlePubKey=', 'WireGuard peer should be unregistered');
+  });
+
+  test('deleteRouter hard-deletes router without calling removePeer when wgPublicKey is absent', async () => {
+    const existingRouter = { id: 'r-no-wg', wgPublicKey: null, isActive: true };
+    mockPrisma.router.findUnique = async () => existingRouter;
+    mockPrisma.session.count = async () => 0;
+
+    let deletedId: string | null = null;
+    mockPrisma.router.delete = async ({ where }: any) => {
+      deletedId = where.id;
+      return { id: where.id };
+    };
+
+    let removePeerCalled = false;
+    mockWireguard.removePeer = async () => { removePeerCalled = true; };
+
+    const result = await service.deleteRouter('r-no-wg');
+
+    assert.equal(result.outcome, 'deleted');
+    assert.equal(deletedId, 'r-no-wg');
+    assert.equal(removePeerCalled, false, 'removePeer must not be called when no public key');
+  });
+});
 

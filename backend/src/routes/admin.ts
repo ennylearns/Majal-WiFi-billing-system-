@@ -491,38 +491,24 @@ router.delete('/routers/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    const routerRecord = await prisma.router.findUnique({ where: { id } });
-    if (!routerRecord) {
-      return res.status(404).json({ success: false, error: 'Router not found' });
-    }
+    try {
+      const result = await routerService.deleteRouter(id);
 
-    const activeSessionsCount = await prisma.session.count({
-      where: {
-        routerId: id,
-        status: 'ACTIVE'
+      if (result.outcome === 'deactivated') {
+        return res.json({
+          success: true,
+          message: 'Router deactivated successfully',
+          data: result.router,
+        });
       }
-    });
 
-    if (activeSessionsCount > 0) {
-      const updatedRouter = await prisma.router.update({
-        where: { id },
-        data: { isActive: false }
-      });
-
-      return res.json({
-        success: true,
-        message: 'Router deactivated successfully',
-        data: updatedRouter
-      });
+      return res.json({ success: true, message: 'Router deleted successfully' });
+    } catch (err: any) {
+      if (err.message && err.message.startsWith('Router not found:')) {
+        return res.status(404).json({ success: false, error: 'Router not found' });
+      }
+      throw err;
     }
-
-    // Unregister WireGuard peer before deleting
-    if (routerRecord.wgPublicKey) {
-      await wireguardService.removePeer(routerRecord.wgPublicKey);
-    }
-
-    await prisma.router.delete({ where: { id } });
-    res.json({ success: true, message: 'Router deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to delete router' });
   }
