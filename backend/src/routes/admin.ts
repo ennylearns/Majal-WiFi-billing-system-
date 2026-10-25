@@ -1,11 +1,10 @@
 import express, { Response } from 'express';
-import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { body, validationResult } from 'express-validator';
 import sessionService from '../services/sessionService';
 import routerService from '../services/routerService';
-import { generateProvisioningScript } from '../services/provisioningScriptService';
+
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -508,12 +507,15 @@ router.get('/routers/:id/provision-script', async (req: AuthRequest, res: Respon
   try {
     const { id } = req.params;
 
-    const routerRecord = await prisma.router.findUnique({ where: { id } });
-    if (!routerRecord) {
-      return res.status(404).json({ success: false, error: 'Router not found' });
+    let script: string;
+    try {
+      script = await routerService.generateProvisioningScript(id);
+    } catch (err: any) {
+      if (err.message && err.message.startsWith('Router not found')) {
+        return res.status(404).json({ success: false, error: 'Router not found' });
+      }
+      throw err;
     }
-
-    const script = generateProvisioningScript(routerRecord);
 
     if (req.headers.accept === 'text/plain' || req.query.format === 'text') {
       return res.type('text/plain').send(script);
@@ -530,6 +532,7 @@ router.get('/routers/:id/provision-script', async (req: AuthRequest, res: Respon
     res.status(500).json({ success: false, error: 'Failed to generate provisioning script' });
   }
 });
+
 
 // Test router connection with granular diagnostics
 router.post('/routers/:id/test-connection', async (req: AuthRequest, res: Response) => {

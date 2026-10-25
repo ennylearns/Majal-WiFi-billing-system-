@@ -483,7 +483,7 @@ describe('Admin Router Endpoints - Integration Tests', () => {
     assert.equal(json.error, 'Router not found');
   });
 
-  test('GET /api/admin/routers/:id/provision-script returns generated RouterOS script', async () => {
+  test('GET /api/admin/routers/:id/provision-script returns generated RouterOS script as JSON by default', async () => {
     const router = await prisma.router.create({
       data: {
         name: 'Provisioned Router',
@@ -503,16 +503,89 @@ describe('Admin Router Endpoints - Integration Tests', () => {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       assert.equal(res.status, 200);
+      assert.ok(res.headers.get('content-type')?.includes('application/json'));
       const json = await res.json() as any;
       assert.equal(json.success, true);
       assert.ok(json.data && json.data.script);
       assert.ok(json.data.script.includes('/system/identity set name="Provisioned Router"'));
       assert.ok(json.data.script.includes('10.250.0.8/24'));
       assert.ok(json.data.script.includes('router_west'));
+      assert.equal(json.script, json.data.script);
     } finally {
       await prisma.router.delete({ where: { id: router.id } });
     }
   });
+
+  test('GET /api/admin/routers/:id/provision-script returns plain text when Accept header is text/plain', async () => {
+    const router = await prisma.router.create({
+      data: {
+        name: 'Plain Text Accept Router',
+        location: 'Branch T',
+        host: '10.250.0.31',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+        wgTunnelIp: '10.250.0.31',
+      },
+    });
+
+    try {
+      const res = await fetch(`${baseUrl}/routers/${router.id}/provision-script`, {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          Accept: 'text/plain',
+        },
+      });
+
+      assert.equal(res.status, 200);
+      assert.ok(res.headers.get('content-type')?.includes('text/plain'));
+      const text = await res.text();
+      assert.ok(
+        text.includes(
+          '# Majal WiFi Billing System - RouterOS v7 Provisioning Script'
+        )
+      );
+      assert.ok(text.includes('Plain Text Accept Router'));
+    } finally {
+      await prisma.router.delete({ where: { id: router.id } });
+    }
+  });
+
+  test('GET /api/admin/routers/:id/provision-script returns plain text when query param format=text', async () => {
+    const router = await prisma.router.create({
+      data: {
+        name: 'Plain Text Query Router',
+        location: 'Branch Q',
+        host: '10.250.0.32',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+        wgTunnelIp: '10.250.0.32',
+      },
+    });
+
+    try {
+      const res = await fetch(
+        `${baseUrl}/routers/${router.id}/provision-script?format=text`,
+        {
+          headers: { Authorization: `Bearer ${adminToken}` },
+        }
+      );
+
+      assert.equal(res.status, 200);
+      assert.ok(res.headers.get('content-type')?.includes('text/plain'));
+      const text = await res.text();
+      assert.ok(
+        text.includes(
+          '# Majal WiFi Billing System - RouterOS v7 Provisioning Script'
+        )
+      );
+      assert.ok(text.includes('Plain Text Query Router'));
+    } finally {
+      await prisma.router.delete({ where: { id: router.id } });
+    }
+  });
+
 
   // Slice 7: Granular test-connection diagnostics
   test('POST /api/admin/routers/:id/test-connection returns status tunnel_offline when WireGuard handshake is missing', async () => {
@@ -655,5 +728,7 @@ describe('Admin Router Endpoints - Integration Tests', () => {
     }
   });
 });
+
+
 
 

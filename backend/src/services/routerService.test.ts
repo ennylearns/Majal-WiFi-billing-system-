@@ -465,5 +465,64 @@ describe('RouterService - Foundation, CRUD and Rollback', () => {
       assert.deepEqual(status.users, mockUsers);
     });
   });
+
+  describe('generateProvisioningScript', () => {
+    test('throws error if router does not exist', async () => {
+      mockPrisma.router.findUnique = async () => null;
+
+      await assert.rejects(
+        async () => {
+          await service.generateProvisioningScript('missing-id');
+        },
+        { message: 'Router not found' }
+      );
+    });
+
+    test('generates provisioning script for registered router using default generator', async () => {
+      const mockRouter = {
+        id: 'r-prov-1',
+        name: 'Gateway Alpha',
+        username: 'billing-api',
+        password: 'securepassword',
+        wgTunnelIp: '10.250.0.5',
+        wgPrivateKey: 'cml2YXRla2V5',
+      };
+
+      mockPrisma.router.findUnique = async () => mockRouter;
+
+      const script = await service.generateProvisioningScript('r-prov-1');
+      assert.ok(script.includes('# Majal WiFi Billing System - RouterOS v7 Provisioning Script'));
+      assert.ok(script.includes('Gateway Alpha'));
+      assert.ok(script.includes('10.250.0.5'));
+    });
+
+    test('delegates to injected generator with router record and custom options', async () => {
+      const mockRouter = {
+        id: 'r-prov-custom',
+        name: 'Custom Gateway',
+        username: 'admin',
+        password: 'pass',
+      };
+      mockPrisma.router.findUnique = async () => mockRouter;
+
+      let passedRouter: any;
+      let passedOptions: any;
+      const customGenerator = (router: any, options: any) => {
+        passedRouter = router;
+        passedOptions = options;
+        return '# Custom Script Output';
+      };
+
+      const customService = new RouterService(mockPrisma, mockWireguard, undefined, customGenerator);
+      const script = await customService.generateProvisioningScript('r-prov-custom', {
+        portalDomain: 'custom.portal.com',
+      });
+
+      assert.equal(script, '# Custom Script Output');
+      assert.deepEqual(passedRouter, mockRouter);
+      assert.deepEqual(passedOptions, { portalDomain: 'custom.portal.com' });
+    });
+  });
 });
+
 

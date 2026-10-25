@@ -2,6 +2,13 @@ import crypto from 'crypto';
 import { PrismaClient, Router } from '@prisma/client';
 import wireguardService, { WireguardService } from './wireguardService';
 import { MikrotikService, MikrotikCredentials, UserSession } from './mikrotikService';
+import {
+  generateProvisioningScript,
+  ProvisioningRouterInfo,
+  ProvisioningScriptOptions,
+} from './provisioningScriptService';
+
+export { ProvisioningScriptOptions };
 
 export type DeleteRouterResult =
   | { outcome: 'deactivated'; router: Router }
@@ -22,6 +29,11 @@ export interface RouterStatusResult {
 }
 
 export type MikrotikServiceFactory = (credentials: MikrotikCredentials) => MikrotikService;
+
+export type ProvisioningScriptGenerator = (
+  router: ProvisioningRouterInfo,
+  options?: ProvisioningScriptOptions
+) => string;
 
 export interface CreateRouterInput {
   name: string;
@@ -46,16 +58,21 @@ export class RouterService {
   private prisma: PrismaClient;
   private wireguard: WireguardService;
   private mikrotikFactory: MikrotikServiceFactory;
+  private provisioningScriptGenerator: ProvisioningScriptGenerator;
 
   constructor(
     prismaClient?: PrismaClient,
     wireguardServiceInstance?: WireguardService,
-    mikrotikFactory?: MikrotikServiceFactory
+    mikrotikFactory?: MikrotikServiceFactory,
+    provisioningScriptGenerator?: ProvisioningScriptGenerator
   ) {
     this.prisma = prismaClient || new PrismaClient();
     this.wireguard = wireguardServiceInstance || wireguardService;
     this.mikrotikFactory = mikrotikFactory || ((creds) => new MikrotikService(creds));
+    this.provisioningScriptGenerator =
+      provisioningScriptGenerator || generateProvisioningScript;
   }
+
 
   /**
    * Retrieve all routers ordered by creation date descending.
@@ -266,8 +283,25 @@ export class RouterService {
       users,
     };
   }
+
+  /**
+   * Generate RouterOS provisioning script for a registered router.
+   * Throws descriptive error if router not found.
+   */
+  async generateProvisioningScript(
+    id: string,
+    options?: ProvisioningScriptOptions
+  ): Promise<string> {
+    const routerRecord = await this.prisma.router.findUnique({ where: { id } });
+    if (!routerRecord) {
+      throw new Error('Router not found');
+    }
+
+    return this.provisioningScriptGenerator(routerRecord, options);
+  }
 }
 
 export const defaultRouterService = new RouterService();
 export default defaultRouterService;
+
 
