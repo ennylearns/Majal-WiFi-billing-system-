@@ -54,6 +54,9 @@ export interface UpdateRouterInput {
   isActive?: boolean;
 }
 
+const defaultPrisma = new PrismaClient();
+const defaultMikrotikFactory: MikrotikServiceFactory = (creds) => new MikrotikService(creds);
+
 export class RouterService {
   private prisma: PrismaClient;
   private wireguard: WireguardService;
@@ -61,16 +64,15 @@ export class RouterService {
   private provisioningScriptGenerator: ProvisioningScriptGenerator;
 
   constructor(
-    prismaClient?: PrismaClient,
-    wireguardServiceInstance?: WireguardService,
-    mikrotikFactory?: MikrotikServiceFactory,
-    provisioningScriptGenerator?: ProvisioningScriptGenerator
+    prismaClient: PrismaClient = defaultPrisma,
+    wireguardServiceInstance: WireguardService = wireguardService,
+    mikrotikFactory: MikrotikServiceFactory = defaultMikrotikFactory,
+    provisioningScriptGenerator: ProvisioningScriptGenerator = generateProvisioningScript
   ) {
-    this.prisma = prismaClient || new PrismaClient();
-    this.wireguard = wireguardServiceInstance || wireguardService;
-    this.mikrotikFactory = mikrotikFactory || ((creds) => new MikrotikService(creds));
-    this.provisioningScriptGenerator =
-      provisioningScriptGenerator || generateProvisioningScript;
+    this.prisma = prismaClient;
+    this.wireguard = wireguardServiceInstance;
+    this.mikrotikFactory = mikrotikFactory;
+    this.provisioningScriptGenerator = provisioningScriptGenerator;
   }
 
 
@@ -301,7 +303,12 @@ export class RouterService {
   }
 }
 
-export const defaultRouterService = new RouterService();
+export const defaultRouterService = new RouterService(
+  defaultPrisma,
+  wireguardService,
+  defaultMikrotikFactory,
+  generateProvisioningScript
+);
 export default defaultRouterService;
 
 

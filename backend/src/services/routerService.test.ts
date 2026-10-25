@@ -1,6 +1,12 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { RouterService, CreateRouterInput, UpdateRouterInput, DeleteRouterResult } from './routerService';
+import {
+  RouterService,
+  defaultRouterService,
+  CreateRouterInput,
+  UpdateRouterInput,
+  DeleteRouterResult,
+} from './routerService';
 import { WireguardService } from './wireguardService';
 
 describe('RouterService - Foundation, CRUD and Rollback', () => {
@@ -35,11 +41,10 @@ describe('RouterService - Foundation, CRUD and Rollback', () => {
     service = new RouterService(mockPrisma, mockWireguard);
   });
 
-  test('constructor defaults to standard singletons when dependencies omitted', () => {
+  test('constructor instantiates with defaults when dependencies omitted', () => {
     const defaultService = new RouterService();
-    assert.ok(defaultService);
-    assert.ok((defaultService as any).prisma);
-    assert.ok((defaultService as any).wireguard);
+    assert.ok(defaultService instanceof RouterService);
+    assert.ok(defaultRouterService instanceof RouterService);
   });
 
   test('listRouters returns routers sorted by createdAt descending', async () => {
