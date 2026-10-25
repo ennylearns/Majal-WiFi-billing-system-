@@ -6,8 +6,8 @@ import {
   CreateRouterInput,
   UpdateRouterInput,
   DeleteRouterResult,
-} from './routerService';
-import { WireguardService } from './wireguardService';
+} from '../routerService';
+import { WireguardService } from '../wireguardService';
 
 describe('RouterService - Foundation, CRUD and Rollback', () => {
   let mockPrisma: any;
