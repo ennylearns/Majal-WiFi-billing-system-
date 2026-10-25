@@ -583,6 +583,77 @@ describe('Admin Router Endpoints - Integration Tests', () => {
       await prisma.router.delete({ where: { id: router.id } });
     }
   });
+
+  // Slice 8: GET /api/admin/routers/:id/status
+  test('GET /api/admin/routers/:id/status returns 404 when router not found', async () => {
+    const res = await fetch(`${baseUrl}/routers/non-existent-status-id/status`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+
+    assert.equal(res.status, 404);
+    const json = await res.json() as any;
+    assert.equal(json.success, false);
+    assert.equal(json.error, 'Router not found');
+  });
+
+  test('GET /api/admin/routers/:id/status returns active user count and user list', async () => {
+    const router = await prisma.router.create({
+      data: {
+        name: 'Status Test Router',
+        location: 'Branch S',
+        host: '10.250.0.22',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+      },
+    });
+
+    const origConnect = RouterOSAPI.prototype.connect;
+    const origClose = RouterOSAPI.prototype.close;
+    const origWrite = RouterOSAPI.prototype.write;
+
+    (RouterOSAPI.prototype as any).connect = async function () { return this; };
+    (RouterOSAPI.prototype as any).close = async function () { return this; };
+    (RouterOSAPI.prototype as any).write = async function (cmd: string) {
+      if (cmd === '/ip/hotspot/active/print') {
+        return [
+          {
+            '.id': '*A',
+            user: 'john_doe',
+            address: '192.168.88.25',
+            'mac-address': '00:11:22:33:44:55',
+            'bytes-in': '5242880',
+            'bytes-out': '10485760',
+            uptime: '2h15m',
+          },
+        ];
+      }
+      return [];
+    };
+
+    try {
+      const res = await fetch(`${baseUrl}/routers/${router.id}/status`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+
+      assert.equal(res.status, 200);
+      const json = await res.json() as any;
+      assert.equal(json.success, true);
+      assert.equal(json.data.activeUsers, 1);
+      assert.equal(json.data.users.length, 1);
+      assert.equal(json.data.users[0].username, 'john_doe');
+      assert.equal(json.data.users[0].ipAddress, '192.168.88.25');
+      assert.equal(json.data.users[0].macAddress, '00:11:22:33:44:55');
+      assert.equal(json.data.users[0].bytesIn, 5242880);
+      assert.equal(json.data.users[0].bytesOut, 10485760);
+      assert.equal(json.data.users[0].uptime, '2h15m');
+    } finally {
+      RouterOSAPI.prototype.connect = origConnect;
+      RouterOSAPI.prototype.close = origClose;
+      RouterOSAPI.prototype.write = origWrite;
+      await prisma.router.delete({ where: { id: router.id } });
+    }
+  });
 });
 
 

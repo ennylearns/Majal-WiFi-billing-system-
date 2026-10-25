@@ -1,10 +1,27 @@
 import crypto from 'crypto';
 import { PrismaClient, Router } from '@prisma/client';
 import wireguardService, { WireguardService } from './wireguardService';
+import { MikrotikService, MikrotikCredentials, UserSession } from './mikrotikService';
 
 export type DeleteRouterResult =
   | { outcome: 'deactivated'; router: Router }
   | { outcome: 'deleted' };
+
+export type TestConnectionStatus = 'online' | 'tunnel_offline' | 'auth_failed' | 'unreachable';
+
+export interface TestConnectionResult {
+  success: boolean;
+  status: TestConnectionStatus;
+  message?: string;
+  error?: string;
+}
+
+export interface RouterStatusResult {
+  activeUsers: number;
+  users: UserSession[];
+}
+
+export type MikrotikServiceFactory = (credentials: MikrotikCredentials) => MikrotikService;
 
 export interface CreateRouterInput {
   name: string;
@@ -28,10 +45,16 @@ export interface UpdateRouterInput {
 export class RouterService {
   private prisma: PrismaClient;
   private wireguard: WireguardService;
+  private mikrotikFactory: MikrotikServiceFactory;
 
-  constructor(prismaClient?: PrismaClient, wireguardServiceInstance?: WireguardService) {
+  constructor(
+    prismaClient?: PrismaClient,
+    wireguardServiceInstance?: WireguardService,
+    mikrotikFactory?: MikrotikServiceFactory
+  ) {
     this.prisma = prismaClient || new PrismaClient();
     this.wireguard = wireguardServiceInstance || wireguardService;
+    this.mikrotikFactory = mikrotikFactory || ((creds) => new MikrotikService(creds));
   }
 
   /**
@@ -155,6 +178,93 @@ export class RouterService {
 
     await this.prisma.router.delete({ where: { id } });
     return { outcome: 'deleted' };
+  }
+
+  /**
+   * Test router connection with granular diagnostics:
+   * 1. Checks WireGuard tunnel handshake status if WireGuard public key configured.
+   *    If inactive, returns tunnel_offline immediately without stalling on downstream timeouts.
+   * 2. Attempts RouterOS API connect and disconnect cleanly.
+   * 3. Categorizes connection failures into auth_failed or unreachable.
+   */
+  async testConnection(id: string): Promise<TestConnectionResult> {
+    const routerRecord = await this.prisma.router.findUnique({ where: { id } });
+    if (!routerRecord) {
+      throw new Error('Router not found');
+    }
+
+    if (routerRecord.wgPublicKey) {
+      const handshake = await this.wireguard.getPeerHandshake(routerRecord.wgPublicKey);
+      if (!handshake.isConnected) {
+        return {
+          success: false,
+          status: 'tunnel_offline',
+          error: 'WireGuard tunnel offline (no recent handshake from router)',
+        };
+      }
+    }
+
+    const mikrotik = this.mikrotikFactory({
+      host: routerRecord.host,
+      port: routerRecord.port,
+      username: routerRecord.username,
+      password: routerRecord.password,
+    });
+
+    try {
+      await mikrotik.connect();
+      await mikrotik.disconnect();
+      return {
+        success: true,
+        status: 'online',
+        message: 'Router connected successfully',
+      };
+    } catch (connErr: any) {
+      const message = connErr?.message || '';
+      const isAuthError =
+        message.toLowerCase().includes('cannot log in') ||
+        message.toLowerCase().includes('invalid user') ||
+        message.toLowerCase().includes('auth') ||
+        message.toLowerCase().includes('login') ||
+        message.toLowerCase().includes('wrong password') ||
+        message.toLowerCase().includes('access denied');
+
+      return {
+        success: false,
+        status: isAuthError ? 'auth_failed' : 'unreachable',
+        error: message || (isAuthError ? 'Authentication failed' : 'Router unreachable'),
+      };
+    }
+  }
+
+  /**
+   * Query currently active hotspot users on a router.
+   */
+  async getActiveUsers(id: string): Promise<UserSession[]> {
+    const routerRecord = await this.prisma.router.findUnique({ where: { id } });
+    if (!routerRecord) {
+      throw new Error('Router not found');
+    }
+
+    const mikrotik = this.mikrotikFactory({
+      host: routerRecord.host,
+      port: routerRecord.port,
+      username: routerRecord.username,
+      password: routerRecord.password,
+    });
+
+    return await mikrotik.getActiveUsers();
+  }
+
+  /**
+   * Get router active user count and user list details.
+   */
+  async getRouterStatus(id: string): Promise<RouterStatusResult> {
+    const users = await this.getActiveUsers(id);
+    return {
+      activeUsers: users.length,
+      users,
+    };
   }
 }
 

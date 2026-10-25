@@ -3,9 +3,7 @@ import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { body, validationResult } from 'express-validator';
-import { MikrotikService } from '../services/mikrotikService';
 import sessionService from '../services/sessionService';
-import wireguardService from '../services/wireguardService';
 import routerService from '../services/routerService';
 import { generateProvisioningScript } from '../services/provisioningScriptService';
 
@@ -365,27 +363,18 @@ router.get('/routers/:id/status', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    const routerRecord = await prisma.router.findUnique({ where: { id } });
-    if (!routerRecord) {
-      return res.status(404).json({ success: false, error: 'Router not found' });
+    try {
+      const data = await routerService.getRouterStatus(id);
+      res.json({
+        success: true,
+        data,
+      });
+    } catch (err: any) {
+      if (err.message && err.message.startsWith('Router not found')) {
+        return res.status(404).json({ success: false, error: 'Router not found' });
+      }
+      throw err;
     }
-
-    const service = new MikrotikService({
-      host: routerRecord.host,
-      port: routerRecord.port,
-      username: routerRecord.username,
-      password: routerRecord.password,
-    });
-
-    const activeUsers = await service.getActiveUsers();
-
-    res.json({
-      success: true,
-      data: {
-        activeUsers: activeUsers.length,
-        users: activeUsers,
-      },
-    });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get router status' });
   }
@@ -547,53 +536,14 @@ router.post('/routers/:id/test-connection', async (req: AuthRequest, res: Respon
   try {
     const { id } = req.params;
 
-    const routerRecord = await prisma.router.findUnique({ where: { id } });
-    if (!routerRecord) {
-      return res.status(404).json({ success: false, error: 'Router not found' });
-    }
-
-    // Check WireGuard tunnel handshake status first if router has WireGuard configured
-    if (routerRecord.wgPublicKey) {
-      const handshake = await wireguardService.getPeerHandshake(routerRecord.wgPublicKey);
-      if (!handshake.isConnected) {
-        return res.json({
-          success: false,
-          status: 'tunnel_offline',
-          error: 'WireGuard tunnel offline (no recent handshake from router)'
-        });
-      }
-    }
-
-    const service = new MikrotikService({
-      host: routerRecord.host,
-      port: routerRecord.port,
-      username: routerRecord.username,
-      password: routerRecord.password
-    });
-
     try {
-      await service.connect();
-      await service.disconnect();
-      return res.json({
-        success: true,
-        status: 'online',
-        message: 'Router connected successfully'
-      });
-    } catch (connErr: any) {
-      const message = connErr?.message || '';
-      const isAuthError =
-        message.toLowerCase().includes('cannot log in') ||
-        message.toLowerCase().includes('invalid user') ||
-        message.toLowerCase().includes('auth') ||
-        message.toLowerCase().includes('login') ||
-        message.toLowerCase().includes('wrong password') ||
-        message.toLowerCase().includes('access denied');
-
-      return res.json({
-        success: false,
-        status: isAuthError ? 'auth_failed' : 'unreachable',
-        error: message || (isAuthError ? 'Authentication failed' : 'Router unreachable')
-      });
+      const result = await routerService.testConnection(id);
+      res.json(result);
+    } catch (err: any) {
+      if (err.message && err.message.startsWith('Router not found')) {
+        return res.status(404).json({ success: false, error: 'Router not found' });
+      }
+      throw err;
     }
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to test router connection' });

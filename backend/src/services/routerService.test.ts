@@ -285,5 +285,185 @@ describe('RouterService - Foundation, CRUD and Rollback', () => {
     assert.equal(deletedId, 'r-no-wg');
     assert.equal(removePeerCalled, false, 'removePeer must not be called when no public key');
   });
+
+  // ── Diagnostics & Telemetry ──────────────────────────────────────────────────
+
+  describe('testConnection', () => {
+    test('throws error if router does not exist', async () => {
+      mockPrisma.router.findUnique = async () => null;
+
+      await assert.rejects(
+        async () => {
+          await service.testConnection('missing-id');
+        },
+        { message: 'Router not found' }
+      );
+    });
+
+    test('returns tunnel_offline immediately if WireGuard key configured and handshake is inactive', async () => {
+      mockPrisma.router.findUnique = async () => ({
+        id: 'r-wg-offline',
+        wgPublicKey: 'offlineKey=',
+        host: '10.250.0.5',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+      });
+
+      mockWireguard.getPeerHandshake = async (pubKey: string) => {
+        assert.equal(pubKey, 'offlineKey=');
+        return { isConnected: false, lastHandshakeTime: null };
+      };
+
+      let mikrotikCreated = false;
+      const customService = new RouterService(mockPrisma, mockWireguard, () => {
+        mikrotikCreated = true;
+        return {} as any;
+      });
+
+      const result = await customService.testConnection('r-wg-offline');
+
+      assert.equal(result.success, false);
+      assert.equal(result.status, 'tunnel_offline');
+      assert.ok(result.error?.includes('WireGuard tunnel offline'));
+      assert.equal(mikrotikCreated, false, 'Should not attempt RouterOS connection when tunnel offline');
+    });
+
+    test('returns online and disconnects cleanly on successful connection when handshake active', async () => {
+      mockPrisma.router.findUnique = async () => ({
+        id: 'r-online',
+        wgPublicKey: 'onlineKey=',
+        host: '10.250.0.6',
+        port: 8728,
+        username: 'admin',
+        password: 'secret',
+      });
+
+      mockWireguard.getPeerHandshake = async () => ({
+        isConnected: true,
+        lastHandshakeTime: new Date(),
+      });
+
+      let connectCalled = false;
+      let disconnectCalled = false;
+      let credentialsReceived: any;
+
+      const customService = new RouterService(mockPrisma, mockWireguard, (creds) => {
+        credentialsReceived = creds;
+        return {
+          connect: async () => { connectCalled = true; },
+          disconnect: async () => { disconnectCalled = true; },
+        } as any;
+      });
+
+      const result = await customService.testConnection('r-online');
+
+      assert.equal(result.success, true);
+      assert.equal(result.status, 'online');
+      assert.equal(result.message, 'Router connected successfully');
+      assert.equal(connectCalled, true);
+      assert.equal(disconnectCalled, true);
+      assert.deepEqual(credentialsReceived, {
+        host: '10.250.0.6',
+        port: 8728,
+        username: 'admin',
+        password: 'secret',
+      });
+    });
+
+    test('returns auth_failed when connection fails with authentication credentials error', async () => {
+      mockPrisma.router.findUnique = async () => ({
+        id: 'r-bad-auth',
+        wgPublicKey: null,
+        host: '192.168.1.1',
+        port: 8728,
+        username: 'admin',
+        password: 'wrong',
+      });
+
+      const customService = new RouterService(mockPrisma, mockWireguard, () => ({
+        connect: async () => {
+          throw new Error('cannot log in: invalid user name or password');
+        },
+        disconnect: async () => {},
+      } as any));
+
+      const result = await customService.testConnection('r-bad-auth');
+
+      assert.equal(result.success, false);
+      assert.equal(result.status, 'auth_failed');
+      assert.ok(result.error?.includes('cannot log in'));
+    });
+
+    test('returns unreachable when connection fails with network or reachability error', async () => {
+      mockPrisma.router.findUnique = async () => ({
+        id: 'r-unreachable',
+        wgPublicKey: null,
+        host: '192.168.1.99',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+      });
+
+      const customService = new RouterService(mockPrisma, mockWireguard, () => ({
+        connect: async () => {
+          throw new Error('connect ECONNREFUSED 192.168.1.99:8728');
+        },
+        disconnect: async () => {},
+      } as any));
+
+      const result = await customService.testConnection('r-unreachable');
+
+      assert.equal(result.success, false);
+      assert.equal(result.status, 'unreachable');
+      assert.ok(result.error?.includes('ECONNREFUSED'));
+    });
+  });
+
+  describe('getActiveUsers / getRouterStatus', () => {
+    test('throws error if router does not exist', async () => {
+      mockPrisma.router.findUnique = async () => null;
+
+      await assert.rejects(
+        async () => {
+          await service.getActiveUsers('missing-id');
+        },
+        { message: 'Router not found' }
+      );
+    });
+
+    test('queries active hotspot users from RouterOS and returns count and details', async () => {
+      mockPrisma.router.findUnique = async () => ({
+        id: 'r-status',
+        host: '10.250.0.10',
+        port: 8728,
+        username: 'admin',
+        password: 'password',
+      });
+
+      const mockUsers = [
+        {
+          sessionId: '*1',
+          username: 'user1',
+          ipAddress: '192.168.88.10',
+          macAddress: 'AA:BB:CC:DD:EE:01',
+          bytesIn: 1000,
+          bytesOut: 2000,
+          uptime: '10m',
+        },
+      ];
+
+      const customService = new RouterService(mockPrisma, mockWireguard, () => ({
+        getActiveUsers: async () => mockUsers,
+      } as any));
+
+      const users = await customService.getActiveUsers('r-status');
+      assert.deepEqual(users, mockUsers);
+
+      const status = await customService.getRouterStatus('r-status');
+      assert.equal(status.activeUsers, 1);
+      assert.deepEqual(status.users, mockUsers);
+    });
+  });
 });
 

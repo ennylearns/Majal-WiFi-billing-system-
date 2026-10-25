@@ -4,12 +4,12 @@
 
 **Blocked by:** 01: Router Service Foundation, Creation Rollback & CRUD
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Testing connection for a router with a WireGuard key evaluates handshake status first, returning a tunnel offline status if inactive.
-- [ ] Testing connection with an active tunnel attempts RouterOS connection and disconnects cleanly upon success, returning an online status.
-- [ ] RouterOS connection errors during diagnostics are analyzed and classified into authentication failed or unreachable statuses.
-- [ ] Active hotspot users are queried from RouterOS for a given router and returned with user counts and details.
-- [ ] The administrator test-connection and router status route handlers delegate to the router service.
-- [ ] Unit tests verify handshake failure handling, credential failure classification, unreachable classification, and successful diagnostic flows.
-- [ ] Existing administrator router integration tests for test-connection and status continue to pass.
+- [x] Testing connection for a router with a WireGuard key evaluates handshake status first, returning a tunnel offline status if inactive.
+- [x] Testing connection with an active tunnel attempts RouterOS connection and disconnects cleanly upon success, returning an online status.
+- [x] RouterOS connection errors during diagnostics are analyzed and classified into authentication failed or unreachable statuses.
+- [x] Active hotspot users are queried from RouterOS for a given router and returned with user counts and details.
+- [x] The administrator test-connection and router status route handlers delegate to the router service.
+- [x] Unit tests verify handshake failure handling, credential failure classification, unreachable classification, and successful diagnostic flows.
+- [x] Existing administrator router integration tests for test-connection and status continue to pass.
