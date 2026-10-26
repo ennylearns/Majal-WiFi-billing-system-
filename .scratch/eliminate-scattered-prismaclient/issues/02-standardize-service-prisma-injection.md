@@ -4,10 +4,10 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Update `backend/src/services/sessionService.ts` to accept `prismaClient: PrismaClient = prisma` in its constructor, store as `this.prisma`, and update all query methods to reference `this.prisma`.
-- [ ] Update `backend/src/services/paystackService.ts` constructor to default to the shared `prisma` singleton instead of calling `new PrismaClient()` inline.
-- [ ] Update `backend/src/services/routerService.ts` and `backend/src/services/routerSeedService.ts` to import `prisma` from `../database/db` as default dependency instead of module-level `const defaultPrisma = new PrismaClient()`.
-- [ ] Add unit tests for `SessionService` verifying custom mock Prisma client injection.
-- [ ] Verify existing service unit tests (`routerService.test.ts`, `paystackService.test.ts`) continue to pass.
+- [x] Update `backend/src/services/sessionService.ts` to accept `prismaClient: PrismaClient = prisma` in its constructor, store as `this.prisma`, and update all query methods to reference `this.prisma`.
+- [x] Update `backend/src/services/paystackService.ts` constructor to default to the shared `prisma` singleton instead of calling `new PrismaClient()` inline.
+- [x] Update `backend/src/services/routerService.ts` and `backend/src/services/routerSeedService.ts` to import `prisma` from `../database/db` as default dependency instead of module-level `const defaultPrisma = new PrismaClient()`.
+- [x] Add unit tests for `SessionService` verifying custom mock Prisma client injection.
+- [x] Verify existing service unit tests (`routerService.test.ts`, `paystackService.test.ts`) continue to pass.

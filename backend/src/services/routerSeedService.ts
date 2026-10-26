@@ -1,5 +1,6 @@
 import { PrismaClient, Router } from '@prisma/client';
 import wireguardService from './wireguardService';
+import { prisma as defaultPrisma } from '../database/db';
 
 export interface SeedRouterEnv {
   MIKROTIK_HOST?: string;
@@ -10,7 +11,6 @@ export interface SeedRouterEnv {
   [key: string]: string | undefined;
 }
 
-const defaultPrisma = new PrismaClient();
 
 export async function seedDefaultRouter(
   prismaClient: any = defaultPrisma,

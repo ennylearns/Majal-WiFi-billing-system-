@@ -7,6 +7,7 @@ import {
   ProvisioningRouterInfo,
   ProvisioningScriptOptions,
 } from './provisioningScriptService';
+import { prisma as defaultPrisma } from '../database/db';
 
 export { ProvisioningScriptOptions };
 
@@ -54,7 +55,6 @@ export interface UpdateRouterInput {
   isActive?: boolean;
 }
 
-const defaultPrisma = new PrismaClient();
 const defaultMikrotikFactory: MikrotikServiceFactory = (creds) => new MikrotikService(creds);
 
 export class RouterService {

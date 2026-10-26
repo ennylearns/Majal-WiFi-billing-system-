@@ -1,8 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { MikrotikService } from './mikrotikService';
 import smsService from './smsService';
-
-const prisma = new PrismaClient();
+import { prisma as defaultPrisma } from '../database/db';
 
 /** Build a MikrotikService from a Router DB record. */
 function mikrotikServiceForRouter(router: {
@@ -20,9 +19,15 @@ function mikrotikServiceForRouter(router: {
 }
 
 export class SessionService {
+  private prisma: PrismaClient;
+
+  constructor(prismaClient: PrismaClient = defaultPrisma) {
+    this.prisma = prismaClient;
+  }
+
   async createSession(userId: string, planId: string, sessionToken: string): Promise<any> {
     try {
-      const plan = await prisma.plan.findUnique({
+      const plan = await this.prisma.plan.findUnique({
         where: { id: planId },
         include: { router: true },
       });
@@ -38,7 +43,7 @@ export class SessionService {
       const endTime = new Date();
       endTime.setHours(endTime.getHours() + plan.duration);
 
-      const session = await prisma.session.create({
+      const session = await this.prisma.session.create({
         data: {
           userId,
           planId,
@@ -76,7 +81,7 @@ export class SessionService {
 
   async terminateSession(sessionId: string): Promise<void> {
     try {
-      const session = await prisma.session.findUnique({
+      const session = await this.prisma.session.findUnique({
         where: { id: sessionId },
         include: {
           user: true,
@@ -95,7 +100,7 @@ export class SessionService {
       let router: { host: string; port: number; username: string; password: string } | null = null;
 
       if (session.routerId) {
-        router = await prisma.router.findUnique({ where: { id: session.routerId } });
+        router = await this.prisma.router.findUnique({ where: { id: session.routerId } });
       }
 
       if (!router && session.plan?.router) {
@@ -103,7 +108,7 @@ export class SessionService {
       }
 
       // Update session status
-      await prisma.session.update({
+      await this.prisma.session.update({
         where: { id: sessionId },
         data: {
           status: 'TERMINATED',
@@ -127,7 +132,7 @@ export class SessionService {
 
   async getActiveSession(sessionToken: string): Promise<any> {
     try {
-      const session = await prisma.session.findUnique({
+      const session = await this.prisma.session.findUnique({
         where: { sessionToken },
         include: {
           user: true,
@@ -154,7 +159,7 @@ export class SessionService {
 
   async getUserActiveSessions(userId: string): Promise<any[]> {
     try {
-      return await prisma.session.findMany({
+      return await this.prisma.session.findMany({
         where: {
           userId,
           status: 'ACTIVE',
@@ -177,7 +182,7 @@ export class SessionService {
 
   async updateSessionUsage(sessionToken: string, dataUsed: number): Promise<void> {
     try {
-      await prisma.session.update({
+      await this.prisma.session.update({
         where: { sessionToken },
         data: { dataUsed },
       });
@@ -197,7 +202,7 @@ export class SessionService {
 // Cleanup expired sessions - each session uses its own per-router MikrotikService
 export const sessionCleanup = async (): Promise<void> => {
   try {
-    const expiredSessions = await prisma.session.findMany({
+    const expiredSessions = await defaultPrisma.session.findMany({
       where: {
         status: 'ACTIVE',
         endTime: {
@@ -210,7 +215,7 @@ export const sessionCleanup = async (): Promise<void> => {
       await new SessionService().terminateSession(session.id);
 
       // Send expiry notification
-      const user = await prisma.user.findUnique({
+      const user = await defaultPrisma.user.findUnique({
         where: { id: session.userId },
       });
 

@@ -128,3 +128,62 @@ describe('SessionService.parseSpeedLimit (via testable subclass)', () => {
     assert.equal(svc.parseSpeed('25'), '25M/25M');
   });
 });
+
+describe('SessionService - custom Prisma client injection', () => {
+  test('uses injected prisma client for getUserActiveSessions', async () => {
+    const mockSessions = [{ id: 'sess-1', userId: 'user-1', status: 'ACTIVE' }];
+    let capturedArgs: any;
+
+    const mockPrisma = {
+      session: {
+        findMany: async (args: any) => {
+          capturedArgs = args;
+          return mockSessions;
+        },
+      },
+    } as any;
+
+    const svc = new SessionService(mockPrisma);
+    const result = await svc.getUserActiveSessions('user-1');
+
+    assert.deepEqual(result, mockSessions);
+    assert.equal(capturedArgs?.where?.userId, 'user-1');
+    assert.equal(capturedArgs?.where?.status, 'ACTIVE');
+  });
+
+  test('uses injected prisma client for updateSessionUsage', async () => {
+    let updatedArgs: any;
+
+    const mockPrisma = {
+      session: {
+        update: async (args: any) => {
+          updatedArgs = args;
+          return {};
+        },
+      },
+    } as any;
+
+    const svc = new SessionService(mockPrisma);
+    await svc.updateSessionUsage('tok-abc', 1024);
+
+    assert.equal(updatedArgs?.where?.sessionToken, 'tok-abc');
+    assert.equal(updatedArgs?.data?.dataUsed, 1024);
+  });
+
+  test('two instances with different prisma clients operate independently', async () => {
+    const callsA: string[] = [];
+    const callsB: string[] = [];
+
+    const prismaA = { session: { findMany: async () => { callsA.push('A'); return []; } } } as any;
+    const prismaB = { session: { findMany: async () => { callsB.push('B'); return []; } } } as any;
+
+    const svcA = new SessionService(prismaA);
+    const svcB = new SessionService(prismaB);
+
+    await svcA.getUserActiveSessions('u1');
+    await svcB.getUserActiveSessions('u2');
+
+    assert.deepEqual(callsA, ['A']);
+    assert.deepEqual(callsB, ['B']);
+  });
+});

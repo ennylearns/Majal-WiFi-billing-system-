@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import sessionService, { SessionService } from './sessionService';
+import { prisma as defaultPrisma } from '../database/db';
 
 export interface InitiateTransactionResponse {
   reference: string;
@@ -17,8 +18,8 @@ export class PaystackService {
   private prisma: PrismaClient;
   public sessionService: SessionService;
 
-  constructor(prismaClient?: PrismaClient, sessionServiceInstance?: SessionService) {
-    this.prisma = prismaClient || new PrismaClient();
+  constructor(prismaClient: PrismaClient = defaultPrisma, sessionServiceInstance?: SessionService) {
+    this.prisma = prismaClient;
     this.sessionService = sessionServiceInstance || sessionService;
   }
 
