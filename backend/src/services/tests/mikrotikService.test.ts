@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RouterOSAPI } from 'node-routeros';
-import { MikrotikService, MikrotikCredentials } from './mikrotikService';
+import { MikrotikService, MikrotikCredentials } from '../mikrotikService';
 
 describe('MikrotikService - Constructor and Credentials', () => {
   const originalEnv = process.env;

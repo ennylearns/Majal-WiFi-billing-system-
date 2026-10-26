@@ -5,8 +5,8 @@ import { AddressInfo } from 'net';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import adminRoutes from './admin';
-import publicRoutes from './public';
+import adminRoutes from '../admin';
+import publicRoutes from '../public';
 
 const prisma = new PrismaClient();
 

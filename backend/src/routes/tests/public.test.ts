@@ -4,7 +4,7 @@ import http from 'http';
 import { AddressInfo } from 'net';
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import publicRoutes from './public';
+import publicRoutes from '../public';
 
 const prisma = new PrismaClient();
 

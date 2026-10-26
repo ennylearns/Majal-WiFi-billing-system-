@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import paystackService, { PaystackService } from './paystackService';
-import sessionService, { SessionService } from './sessionService';
+import paystackService, { PaystackService } from '../paystackService';
+import sessionService, { SessionService } from '../sessionService';
 
 describe('PaystackService - initiateTransaction', () => {
   const originalEnv = process.env;

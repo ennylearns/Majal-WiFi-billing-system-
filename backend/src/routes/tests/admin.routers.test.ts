@@ -6,8 +6,8 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { RouterOSAPI } from 'node-routeros';
-import adminRoutes from './admin';
-import wireguardService from '../services/wireguardService';
+import adminRoutes from '../admin';
+import wireguardService from '../../services/wireguardService';
 
 const prisma = new PrismaClient();
 

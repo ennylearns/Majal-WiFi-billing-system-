@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Create `backend/src/database/db.ts` implementing `globalThis` PrismaClient caching for non-production environments.
-- [ ] Export `prisma` as a named export, default export, and export `disconnectDb()` helper function.
-- [ ] Add unit test suite `backend/src/database/db.test.ts` verifying singleton export and lifecycle behavior.
-- [ ] Verify TypeScript compiles cleanly (`npm run build`).
+- [x] Create `backend/src/database/db.ts` implementing `globalThis` PrismaClient caching for non-production environments.
+- [x] Export `prisma` as a named export, default export, and export `disconnectDb()` helper function.
+- [x] Add unit test suite `backend/src/database/db.test.ts` verifying singleton export and lifecycle behavior.
+- [x] Verify TypeScript compiles cleanly (`npm run build`).

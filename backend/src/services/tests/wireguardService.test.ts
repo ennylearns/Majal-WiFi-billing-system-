@@ -5,7 +5,7 @@ import {
   wireguardService,
   generateWireguardKeyPair,
   deriveWireguardPublicKey
-} from './wireguardService';
+} from '../wireguardService';
 
 describe('WireguardService - Keypair Generation', () => {
   test('generates valid 32-byte base64 curve25519 keypair', () => {

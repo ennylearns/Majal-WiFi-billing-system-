@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateProvisioningScript } from './provisioningScriptService';
+import { generateProvisioningScript } from '../provisioningScriptService';
 
 describe('ProvisioningScriptService - generateProvisioningScript', () => {
   const baseRouter = {

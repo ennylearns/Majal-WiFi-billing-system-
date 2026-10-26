@@ -1,6 +1,6 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedDefaultRouter } from './routerSeedService';
+import { seedDefaultRouter } from '../routerSeedService';
 
 describe('routerSeedService - seedDefaultRouter', () => {
   let mockPrisma: any;

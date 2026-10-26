@@ -1,8 +1,8 @@
 import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RouterOSAPI } from 'node-routeros';
-import { SessionService } from './sessionService';
-import { MikrotikService } from './mikrotikService';
+import { SessionService } from '../sessionService';
+import { MikrotikService } from '../mikrotikService';
 
 // ---------------------------------------------------------------------------
 // RouterOSAPI stubs (same pattern as mikrotikService.test.ts)
