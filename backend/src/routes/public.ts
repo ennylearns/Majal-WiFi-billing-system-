@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../database/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
@@ -8,7 +8,6 @@ import sessionService from '../services/sessionService';
 import smsService from '../services/smsService';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Get all active routers (public location info only)
 router.get('/routers', async (req: Request, res: Response) => {

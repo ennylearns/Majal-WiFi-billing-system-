@@ -1,5 +1,5 @@
 import express, { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../database/db';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { body, validationResult } from 'express-validator';
 import sessionService from '../services/sessionService';
@@ -7,7 +7,6 @@ import routerService from '../services/routerService';
 
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Apply authentication to all admin routes
 router.use(authenticateToken);
