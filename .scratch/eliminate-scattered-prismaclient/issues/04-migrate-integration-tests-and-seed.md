@@ -4,10 +4,10 @@
 
 **Blocked by:** 01, 02, 03
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Update `backend/src/database/seed.ts` to import `{ prisma } from './db'`.
-- [ ] Update `backend/src/routes/admin.routers.test.ts` to import `{ prisma } from '../database/db'`.
-- [ ] Update `backend/src/routes/admin.plans.test.ts` to import `{ prisma } from '../database/db'`.
-- [ ] Update `backend/src/routes/public.test.ts` to import `{ prisma } from '../database/db'`.
-- [ ] Run full test suite (`npm test`) to ensure zero regressions across all tests.
+- [x] Update `backend/src/database/seed.ts` to import `{ prisma } from './db'`.
+- [x] Update `backend/src/routes/tests/admin.routers.test.ts` to import `{ prisma } from '../../database/db'`.
+- [x] Update `backend/src/routes/tests/admin.plans.test.ts` to import `{ prisma } from '../../database/db'`.
+- [x] Update `backend/src/routes/tests/public.test.ts` to import `{ prisma } from '../../database/db'`.
+- [x] Run full test suite (`npm test`) to ensure zero regressions across all tests.

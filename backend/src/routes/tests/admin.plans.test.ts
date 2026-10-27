@@ -4,11 +4,9 @@ import http from 'http';
 import { AddressInfo } from 'net';
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../database/db';
 import adminRoutes from '../admin';
 import publicRoutes from '../public';
-
-const prisma = new PrismaClient();
 
 describe('Plan API with routerId - Integration Tests', () => {
   let server: http.Server;

@@ -4,12 +4,10 @@ import http from 'http';
 import { AddressInfo } from 'net';
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 import { RouterOSAPI } from 'node-routeros';
+import { prisma } from '../../database/db';
 import adminRoutes from '../admin';
 import wireguardService from '../../services/wireguardService';
-
-const prisma = new PrismaClient();
 
 describe('Admin Router Endpoints - Integration Tests', () => {
   let server: http.Server;

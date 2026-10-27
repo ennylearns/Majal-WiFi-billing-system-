@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import http from 'http';
 import { AddressInfo } from 'net';
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../database/db';
 import publicRoutes from '../public';
-
-const prisma = new PrismaClient();
 
 describe('Public Payment Routes - POST /api/public/payment', () => {
   let server: http.Server;
