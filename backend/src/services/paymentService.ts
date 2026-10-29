@@ -400,7 +400,7 @@ export class PaymentService {
   }
 
   /**
-   * Retrieve transaction history for an authenticated customer,
+   * Retrieve payment history for an authenticated customer,
    * scoped to their user ID, ordered by date descending, including plan name and duration.
    */
   async getUserPayments(userId: string): Promise<any[]> {
@@ -452,10 +452,23 @@ export class PaymentService {
     if (params.startDate || params.endDate) {
       where.createdAt = {};
       if (params.startDate) {
-        where.createdAt.gte = new Date(params.startDate);
+        const start = new Date(params.startDate);
+        if (!isNaN(start.getTime())) {
+          where.createdAt.gte = start;
+        }
       }
       if (params.endDate) {
-        where.createdAt.lte = new Date(params.endDate);
+        let endStr =
+          typeof params.endDate === 'string'
+            ? params.endDate
+            : params.endDate.toISOString();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(endStr)) {
+          endStr = `${endStr}T23:59:59.999Z`;
+        }
+        const end = new Date(endStr);
+        if (!isNaN(end.getTime())) {
+          where.createdAt.lte = end;
+        }
       }
     }
 
@@ -480,6 +493,7 @@ export class PaymentService {
           user: {
             select: {
               phone: true,
+              email: true,
               firstName: true,
               lastName: true,
             },

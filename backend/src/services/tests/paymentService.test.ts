@@ -933,7 +933,7 @@ describe('PaymentService — idempotent fulfillment & concurrency race safety', 
   });
 });
 
-describe('PaymentService.getUserPayments — customer transaction history', () => {
+describe('PaymentService.getUserPayments — customer payment history', () => {
   let prisma: ReturnType<typeof makeFakePrisma>;
   let gateway: FakePaymentGateway;
   let service: PaymentService;
