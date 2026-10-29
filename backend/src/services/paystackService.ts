@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import sessionService, { SessionService } from './sessionService';
 import { prisma as defaultPrisma } from '../database/db';
+import { PaymentGateway, PaystackGateway } from './paymentGateway';
 
 export interface InitiateTransactionResponse {
   reference: string;
@@ -17,10 +18,16 @@ export class PaystackService {
   private baseURL = 'https://api.paystack.co';
   private prisma: PrismaClient;
   public sessionService: SessionService;
+  public gateway: PaymentGateway;
 
-  constructor(prismaClient: PrismaClient = defaultPrisma, sessionServiceInstance?: SessionService) {
+  constructor(
+    prismaClient: PrismaClient = defaultPrisma,
+    sessionServiceInstance?: SessionService,
+    gatewayInstance?: PaymentGateway
+  ) {
     this.prisma = prismaClient;
     this.sessionService = sessionServiceInstance || sessionService;
+    this.gateway = gatewayInstance || new PaystackGateway();
   }
 
   private get secretKey(): string {
@@ -28,19 +35,7 @@ export class PaystackService {
   }
 
   verifySignature(rawBody: string | Buffer | any, signature: string): boolean {
-    if (!signature) {
-      return false;
-    }
-    const payload = typeof rawBody === 'string' || Buffer.isBuffer(rawBody)
-      ? rawBody
-      : JSON.stringify(rawBody);
-
-    const hash = crypto
-      .createHmac('sha512', this.secretKey)
-      .update(payload)
-      .digest('hex');
-
-    return hash === signature;
+    return this.gateway.verifyWebhookSignature(rawBody, signature);
   }
 
   async initiateTransaction(
@@ -61,66 +56,24 @@ export class PaystackService {
         timer.unref();
       }
 
-
       return {
         reference: mockReference,
         access_code: mockAccessCode
       };
     }
 
-    const amountInKobo = Math.round(amount * 100);
-
-    const response = await fetch(`${this.baseURL}/transaction/initialize`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.secretKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        email,
-        amount: amountInKobo,
-        currency: 'NGN',
-        metadata: {
-          planId,
-          paymentId
-        }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to initialize Paystack transaction: ${response.statusText}`);
-    }
-
-    const data: any = await response.json();
+    const result = await this.gateway.initiateTransaction(email, amount, planId, paymentId);
     return {
-      reference: data.data.reference,
-      access_code: data.data.access_code
+      reference: result.reference,
+      access_code: result.access_code
     };
   }
 
   async verifyTransaction(reference: string): Promise<VerifyTransactionResponse> {
-    if (process.env.NODE_ENV === 'development' || reference.startsWith('mock_ref_')) {
-      return {
-        status: 'success',
-        amount: 10000
-      };
-    }
-
-    const response = await fetch(`${this.baseURL}/transaction/verify/${encodeURIComponent(reference)}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.secretKey}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to verify Paystack transaction: ${response.statusText}`);
-    }
-
-    const data: any = await response.json();
+    const result = await this.gateway.verifyTransaction(reference);
     return {
-      status: data.data.status,
-      amount: data.data.amount
+      status: result.status,
+      amount: result.amount
     };
   }
 
@@ -141,10 +94,12 @@ export class PaystackService {
         }
       };
       const rawBody = JSON.stringify(mockPayload);
-      const signature = crypto
-        .createHmac('sha512', this.secretKey)
-        .update(rawBody)
-        .digest('hex');
+      const signature = typeof (this.gateway as any).createWebhookSignature === 'function'
+        ? (this.gateway as any).createWebhookSignature(rawBody)
+        : crypto
+            .createHmac('sha512', this.secretKey)
+            .update(rawBody)
+            .digest('hex');
 
       await this.handleWebhook(rawBody, signature);
       console.log(`🎭 Mock Paystack payment completed for reference: ${reference}`);
@@ -152,7 +107,6 @@ export class PaystackService {
       console.error('Mock Paystack callback error:', error);
     }
   }
-
 
   generateSessionToken(): string {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -221,9 +175,5 @@ export class PaystackService {
     }
   }
 }
-
-
-
-
 
 export default new PaystackService();

@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Define payment gateway interface covering transaction initiation, transaction verification, and webhook signature verification
-- [ ] Wrap production gateway HTTP calls into an adapter satisfying the interface
-- [ ] Create an in-memory fake gateway adapter supporting simulated successes, failures, and deterministic references for testing
-- [ ] Verify that existing vendor transaction initiation and webhook signature checks function identically through the new adapter
+- [x] Define payment gateway interface covering transaction initiation, transaction verification, and webhook signature verification
+- [x] Wrap production gateway HTTP calls into an adapter satisfying the interface
+- [x] Create an in-memory fake gateway adapter supporting simulated successes, failures, and deterministic references for testing
+- [x] Verify that existing vendor transaction initiation and webhook signature checks function identically through the new adapter
