@@ -171,10 +171,12 @@ function makeFakePrisma(seed?: {
               return false;
             });
           }
-          if (args?.where?.id !== undefined) return p.id === args.where.id;
-          if (args?.where?.checkoutRequestId !== undefined) return p.checkoutRequestId === args.where.checkoutRequestId;
-          if (args?.where?.paymentReference !== undefined) return p.paymentReference === args.where.paymentReference;
-          return false;
+          if (args?.where?.id !== undefined && p.id !== args.where.id) return false;
+          if (args?.where?.userId !== undefined && p.userId !== args.where.userId) return false;
+          if (args?.where?.status !== undefined && p.status !== args.where.status) return false;
+          if (args?.where?.checkoutRequestId !== undefined && p.checkoutRequestId !== args.where.checkoutRequestId) return false;
+          if (args?.where?.paymentReference !== undefined && p.paymentReference !== args.where.paymentReference) return false;
+          return true;
         });
 
         if (!match) return null;
@@ -187,6 +189,98 @@ function makeFakePrisma(seed?: {
           result.plan = plans.find(pl => pl.id === match.planId) ?? null;
         }
         return result;
+      },
+      findMany: async (args: any) => {
+        let matches = payments.filter(p => {
+          if (args?.where?.userId !== undefined && p.userId !== args.where.userId) return false;
+          if (args?.where?.status !== undefined && p.status !== args.where.status) return false;
+          if (args?.where?.createdAt) {
+            if (args.where.createdAt.gte && p.createdAt < args.where.createdAt.gte) return false;
+            if (args.where.createdAt.lte && p.createdAt > args.where.createdAt.lte) return false;
+          }
+          if (args?.where?.user) {
+            const u = users.find(usr => usr.id === p.userId);
+            if (!u) return false;
+            if (args.where.user.OR) {
+              const matched = args.where.user.OR.some((clause: any) => {
+                if (clause.phone?.contains && !u.phone?.toLowerCase().includes(clause.phone.contains.toLowerCase())) return false;
+                if (clause.email?.contains && !u.email?.toLowerCase().includes(clause.email.contains.toLowerCase())) return false;
+                if (clause.firstName?.contains && !u.firstName?.toLowerCase().includes(clause.firstName.contains.toLowerCase())) return false;
+                if (clause.lastName?.contains && !u.lastName?.toLowerCase().includes(clause.lastName.contains.toLowerCase())) return false;
+                return true;
+              });
+              if (!matched) return false;
+            }
+          }
+          return true;
+        });
+
+        if (args?.orderBy?.createdAt === 'desc') {
+          matches.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        } else if (args?.orderBy?.createdAt === 'asc') {
+          matches.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        }
+
+        const skip = args?.skip ?? 0;
+        const take = args?.take !== undefined ? args.take : matches.length;
+        matches = matches.slice(skip, skip + take);
+
+        return matches.map(match => {
+          const result: any = { ...match };
+          if (args?.include?.user) {
+            const u = users.find(usr => usr.id === match.userId);
+            if (args.include.user.select) {
+              result.user = {};
+              for (const key of Object.keys(args.include.user.select)) {
+                if (args.include.user.select[key]) {
+                  result.user[key] = (u as any)?.[key] ?? null;
+                }
+              }
+            } else {
+              result.user = u ?? null;
+            }
+          }
+          if (args?.include?.plan) {
+            const pl = plans.find(p => p.id === match.planId);
+            if (args.include.plan.select) {
+              result.plan = {};
+              for (const key of Object.keys(args.include.plan.select)) {
+                if (args.include.plan.select[key]) {
+                  result.plan[key] = (pl as any)?.[key] ?? null;
+                }
+              }
+            } else {
+              result.plan = pl ?? null;
+            }
+          }
+          return result;
+        });
+      },
+      count: async (args: any) => {
+        const matches = payments.filter(p => {
+          if (args?.where?.userId !== undefined && p.userId !== args.where.userId) return false;
+          if (args?.where?.status !== undefined && p.status !== args.where.status) return false;
+          if (args?.where?.createdAt) {
+            if (args.where.createdAt.gte && p.createdAt < args.where.createdAt.gte) return false;
+            if (args.where.createdAt.lte && p.createdAt > args.where.createdAt.lte) return false;
+          }
+          if (args?.where?.user) {
+            const u = users.find(usr => usr.id === p.userId);
+            if (!u) return false;
+            if (args.where.user.OR) {
+              const matched = args.where.user.OR.some((clause: any) => {
+                if (clause.phone?.contains && !u.phone?.toLowerCase().includes(clause.phone.contains.toLowerCase())) return false;
+                if (clause.email?.contains && !u.email?.toLowerCase().includes(clause.email.contains.toLowerCase())) return false;
+                if (clause.firstName?.contains && !u.firstName?.toLowerCase().includes(clause.firstName.contains.toLowerCase())) return false;
+                if (clause.lastName?.contains && !u.lastName?.toLowerCase().includes(clause.lastName.contains.toLowerCase())) return false;
+                return true;
+              });
+              if (!matched) return false;
+            }
+          }
+          return true;
+        });
+        return matches.length;
       },
       findUnique: async (args: any) => {
         const match = payments.find(p => p.id === args.where.id);
@@ -838,5 +932,390 @@ describe('PaymentService — idempotent fulfillment & concurrency race safety', 
     }
   });
 });
+
+describe('PaymentService.getUserPayments — customer transaction history', () => {
+  let prisma: ReturnType<typeof makeFakePrisma>;
+  let gateway: FakePaymentGateway;
+  let service: PaymentService;
+  let user1: FakeUser;
+  let user2: FakeUser;
+  let plan1: FakePlan;
+  let plan2: FakePlan;
+
+  beforeEach(() => {
+    user1 = {
+      id: 'usr-1',
+      phone: '+2348011111111',
+      email: 'user1@example.com',
+      role: 'CUSTOMER',
+      isActive: true,
+      firstName: 'Alice',
+      lastName: 'Smith',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    user2 = {
+      id: 'usr-2',
+      phone: '+2348022222222',
+      email: 'user2@example.com',
+      role: 'CUSTOMER',
+      isActive: true,
+      firstName: 'Bob',
+      lastName: 'Jones',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    plan1 = {
+      id: 'plan-daily',
+      name: 'Daily Pass',
+      isActive: true,
+      price: 500,
+      duration: 1440,
+      dataLimit: '5GB',
+      speedLimit: '10Mbps',
+      routerId: 'rtr-1',
+    };
+    plan2 = {
+      id: 'plan-weekly',
+      name: 'Weekly Pass',
+      isActive: true,
+      price: 2500,
+      duration: 10080,
+      dataLimit: '25GB',
+      speedLimit: '20Mbps',
+      routerId: 'rtr-1',
+    };
+
+    prisma = makeFakePrisma({
+      users: [user1, user2],
+      plans: [plan1, plan2],
+      payments: [
+        {
+          id: 'pay-1',
+          userId: user1.id,
+          planId: plan1.id,
+          amount: 500,
+          status: 'COMPLETED',
+          checkoutRequestId: 'cr-1',
+          paymentReference: 'pr-1',
+          paymentMethod: 'PAYSTACK',
+          createdAt: new Date('2026-01-10T10:00:00Z'),
+          updatedAt: new Date('2026-01-10T10:05:00Z'),
+        },
+        {
+          id: 'pay-2',
+          userId: user1.id,
+          planId: plan2.id,
+          amount: 2500,
+          status: 'COMPLETED',
+          checkoutRequestId: 'cr-2',
+          paymentReference: 'pr-2',
+          paymentMethod: 'PAYSTACK',
+          createdAt: new Date('2026-01-20T10:00:00Z'),
+          updatedAt: new Date('2026-01-20T10:05:00Z'),
+        },
+        {
+          id: 'pay-other',
+          userId: user2.id,
+          planId: plan1.id,
+          amount: 500,
+          status: 'COMPLETED',
+          checkoutRequestId: 'cr-other',
+          paymentReference: 'pr-other',
+          paymentMethod: 'PAYSTACK',
+          createdAt: new Date('2026-01-15T10:00:00Z'),
+          updatedAt: new Date('2026-01-15T10:05:00Z'),
+        },
+      ],
+    });
+    gateway = new FakePaymentGateway();
+    service = new PaymentService(prisma as any, gateway);
+  });
+
+  test('returns user-scoped payments ordered by createdAt desc with plan name and duration', async () => {
+    const payments = await service.getUserPayments(user1.id);
+    assert.equal(payments.length, 2);
+    // Ordered by desc date: pay-2 (Jan 20) before pay-1 (Jan 10)
+    assert.equal(payments[0].id, 'pay-2');
+    assert.equal(payments[0].amount, 2500);
+    assert.equal(payments[0].plan.name, 'Weekly Pass');
+    assert.equal(payments[0].plan.duration, 10080);
+
+    assert.equal(payments[1].id, 'pay-1');
+    assert.equal(payments[1].plan.name, 'Daily Pass');
+    assert.equal(payments[1].plan.duration, 1440);
+  });
+
+  test('enforces user isolation: does not return payments of other users', async () => {
+    const user1Payments = await service.getUserPayments(user1.id);
+    assert.ok(user1Payments.every((p: any) => p.userId === user1.id));
+    assert.ok(!user1Payments.some((p: any) => p.id === 'pay-other'));
+
+    const user2Payments = await service.getUserPayments(user2.id);
+    assert.equal(user2Payments.length, 1);
+    assert.equal(user2Payments[0].id, 'pay-other');
+  });
+
+  test('returns empty array when user has no payments', async () => {
+    const emptyPayments = await service.getUserPayments('non-existent-user');
+    assert.deepEqual(emptyPayments, []);
+  });
+});
+
+describe('PaymentService.getUserPaymentById — single payment lookup', () => {
+  let prisma: ReturnType<typeof makeFakePrisma>;
+  let gateway: FakePaymentGateway;
+  let service: PaymentService;
+  let user1: FakeUser;
+  let user2: FakeUser;
+  let plan1: FakePlan;
+
+  beforeEach(() => {
+    user1 = {
+      id: 'usr-1',
+      phone: '+2348011111111',
+      email: 'user1@example.com',
+      role: 'CUSTOMER',
+      isActive: true,
+      firstName: 'Alice',
+      lastName: 'Smith',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    user2 = {
+      id: 'usr-2',
+      phone: '+2348022222222',
+      email: 'user2@example.com',
+      role: 'CUSTOMER',
+      isActive: true,
+      firstName: 'Bob',
+      lastName: 'Jones',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    plan1 = {
+      id: 'plan-daily',
+      name: 'Daily Pass',
+      isActive: true,
+      price: 500,
+      duration: 1440,
+      dataLimit: '5GB',
+      speedLimit: '10Mbps',
+      routerId: 'rtr-1',
+    };
+
+    prisma = makeFakePrisma({
+      users: [user1, user2],
+      plans: [plan1],
+      payments: [
+        {
+          id: 'pay-1',
+          userId: user1.id,
+          planId: plan1.id,
+          amount: 500,
+          status: 'COMPLETED',
+          checkoutRequestId: 'cr-1',
+          paymentReference: 'pr-1',
+          paymentMethod: 'PAYSTACK',
+          createdAt: new Date('2026-01-10T10:00:00Z'),
+          updatedAt: new Date('2026-01-10T10:05:00Z'),
+        },
+      ],
+    });
+    gateway = new FakePaymentGateway();
+    service = new PaymentService(prisma as any, gateway);
+  });
+
+  test('returns payment when ID matches and belongs to the user, with full plan details', async () => {
+    const payment = await service.getUserPaymentById(user1.id, 'pay-1');
+    assert.ok(payment);
+    assert.equal(payment.id, 'pay-1');
+    assert.equal(payment.userId, user1.id);
+    assert.equal(payment.plan.name, 'Daily Pass');
+    assert.equal(payment.plan.dataLimit, '5GB');
+  });
+
+  test('returns null when payment belongs to a different user (user isolation)', async () => {
+    const payment = await service.getUserPaymentById(user2.id, 'pay-1');
+    assert.equal(payment, null);
+  });
+
+  test('returns null when payment ID does not exist', async () => {
+    const payment = await service.getUserPaymentById(user1.id, 'non-existent-pay');
+    assert.equal(payment, null);
+  });
+});
+
+describe('PaymentService.listPayments — administrative queries & filtering', () => {
+  let prisma: ReturnType<typeof makeFakePrisma>;
+  let gateway: FakePaymentGateway;
+  let service: PaymentService;
+  let user1: FakeUser;
+  let user2: FakeUser;
+  let plan1: FakePlan;
+
+  beforeEach(() => {
+    user1 = {
+      id: 'usr-1',
+      phone: '+2348011111111',
+      email: 'alice@example.com',
+      role: 'CUSTOMER',
+      isActive: true,
+      firstName: 'Alice',
+      lastName: 'Smith',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    user2 = {
+      id: 'usr-2',
+      phone: '+2348022222222',
+      email: 'bob@example.com',
+      role: 'CUSTOMER',
+      isActive: true,
+      firstName: 'Bob',
+      lastName: 'Jones',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    plan1 = {
+      id: 'plan-1',
+      name: 'Standard Pass',
+      isActive: true,
+      price: 1000,
+      duration: 1440,
+      dataLimit: '10GB',
+      speedLimit: '10Mbps',
+      routerId: null,
+    };
+
+    const payments: FakePayment[] = [
+      {
+        id: 'pay-jan-1',
+        userId: user1.id,
+        planId: plan1.id,
+        amount: 1000,
+        status: 'COMPLETED',
+        checkoutRequestId: 'cr-jan-1',
+        paymentReference: 'pr-jan-1',
+        paymentMethod: 'PAYSTACK',
+        createdAt: new Date('2026-01-05T10:00:00Z'),
+        updatedAt: new Date('2026-01-05T10:00:00Z'),
+      },
+      {
+        id: 'pay-jan-2',
+        userId: user2.id,
+        planId: plan1.id,
+        amount: 1000,
+        status: 'PENDING',
+        checkoutRequestId: 'cr-jan-2',
+        paymentReference: 'pr-jan-2',
+        paymentMethod: 'PAYSTACK',
+        createdAt: new Date('2026-01-15T10:00:00Z'),
+        updatedAt: new Date('2026-01-15T10:00:00Z'),
+      },
+      {
+        id: 'pay-feb-1',
+        userId: user1.id,
+        planId: plan1.id,
+        amount: 1000,
+        status: 'COMPLETED',
+        checkoutRequestId: 'cr-feb-1',
+        paymentReference: 'pr-feb-1',
+        paymentMethod: 'PAYSTACK',
+        createdAt: new Date('2026-02-10T10:00:00Z'),
+        updatedAt: new Date('2026-02-10T10:00:00Z'),
+      },
+    ];
+
+    prisma = makeFakePrisma({
+      users: [user1, user2],
+      plans: [plan1],
+      payments,
+    });
+    gateway = new FakePaymentGateway();
+    service = new PaymentService(prisma as any, gateway);
+  });
+
+  test('returns paginated payments with default pagination and user/plan fields', async () => {
+    const result = await service.listPayments({});
+    assert.equal(result.payments.length, 3);
+    assert.deepEqual(result.pagination, {
+      page: 1,
+      limit: 20,
+      total: 3,
+      pages: 1,
+    });
+    assert.equal(result.payments[0].id, 'pay-feb-1'); // ordered desc
+    assert.equal(result.payments[0].user.phone, user1.phone);
+    assert.equal(result.payments[0].plan.name, 'Standard Pass');
+  });
+
+  test('supports custom page and limit pagination', async () => {
+    const page1 = await service.listPayments({ page: 1, limit: 2 });
+    assert.equal(page1.payments.length, 2);
+    assert.deepEqual(page1.pagination, {
+      page: 1,
+      limit: 2,
+      total: 3,
+      pages: 2,
+    });
+    assert.equal(page1.payments[0].id, 'pay-feb-1');
+    assert.equal(page1.payments[1].id, 'pay-jan-2');
+
+    const page2 = await service.listPayments({ page: 2, limit: 2 });
+    assert.equal(page2.payments.length, 1);
+    assert.equal(page2.payments[0].id, 'pay-jan-1');
+    assert.deepEqual(page2.pagination, {
+      page: 2,
+      limit: 2,
+      total: 3,
+      pages: 2,
+    });
+  });
+
+  test('filters payments by status', async () => {
+    const pendingOnly = await service.listPayments({ status: 'PENDING' });
+    assert.equal(pendingOnly.payments.length, 1);
+    assert.equal(pendingOnly.payments[0].id, 'pay-jan-2');
+    assert.equal(pendingOnly.pagination.total, 1);
+
+    const completedOnly = await service.listPayments({ status: 'COMPLETED' });
+    assert.equal(completedOnly.payments.length, 2);
+    assert.equal(completedOnly.pagination.total, 2);
+  });
+
+  test('filters payments by date range (startDate & endDate)', async () => {
+    const janOnly = await service.listPayments({
+      startDate: '2026-01-01T00:00:00Z',
+      endDate: '2026-01-31T23:59:59Z',
+    });
+    assert.equal(janOnly.payments.length, 2);
+    assert.ok(janOnly.payments.every((p: any) => p.id.startsWith('pay-jan')));
+    assert.equal(janOnly.pagination.total, 2);
+
+    const febOnly = await service.listPayments({
+      startDate: '2026-02-01T00:00:00Z',
+    });
+    assert.equal(febOnly.payments.length, 1);
+    assert.equal(febOnly.payments[0].id, 'pay-feb-1');
+  });
+
+  test('filters payments by customer search (phone, email, names)', async () => {
+    // Search by user1 phone
+    const searchPhone = await service.listPayments({ search: '80111' });
+    assert.equal(searchPhone.payments.length, 2);
+    assert.ok(searchPhone.payments.every((p: any) => p.userId === user1.id));
+
+    // Search by user2 firstName
+    const searchName = await service.listPayments({ search: 'Bob' });
+    assert.equal(searchName.payments.length, 1);
+    assert.equal(searchName.payments[0].id, 'pay-jan-2');
+
+    // Search by email
+    const searchEmail = await service.listPayments({ search: 'alice@' });
+    assert.equal(searchEmail.payments.length, 2);
+  });
+});
+
 
 

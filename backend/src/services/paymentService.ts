@@ -48,6 +48,25 @@ export interface FulfillPaymentResult {
   alreadyFulfilled: boolean;
 }
 
+export interface ListPaymentsParams {
+  page?: number | string;
+  limit?: number | string;
+  status?: string;
+  startDate?: Date | string;
+  endDate?: Date | string;
+  search?: string;
+}
+
+export interface ListPaymentsResult {
+  payments: any[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 export interface SessionServiceLike {
   createSession(userId: string, planId: string, sessionToken: string): Promise<any>;
 }
@@ -378,6 +397,112 @@ export class PaymentService {
         status: 'ACTIVE',
       },
     });
+  }
+
+  /**
+   * Retrieve transaction history for an authenticated customer,
+   * scoped to their user ID, ordered by date descending, including plan name and duration.
+   */
+  async getUserPayments(userId: string): Promise<any[]> {
+    return this.prisma.payment.findMany({
+      where: { userId },
+      include: {
+        plan: {
+          select: {
+            name: true,
+            duration: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Retrieve a single payment record scoped to the authenticated customer ID,
+   * including complete plan details.
+   */
+  async getUserPaymentById(userId: string, paymentId: string): Promise<any | null> {
+    return this.prisma.payment.findFirst({
+      where: {
+        id: paymentId,
+        userId,
+      },
+      include: {
+        plan: true,
+      },
+    });
+  }
+
+  /**
+   * Administrative payment listing query supporting pagination, status filtering,
+   * date range filtering, and customer search across user profile fields.
+   */
+  async listPayments(params: ListPaymentsParams = {}): Promise<ListPaymentsResult> {
+    const page = Math.max(1, Number(params.page) || 1);
+    const limit = Math.max(1, Number(params.limit) || 20);
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (params.status) {
+      where.status = params.status;
+    }
+
+    if (params.startDate || params.endDate) {
+      where.createdAt = {};
+      if (params.startDate) {
+        where.createdAt.gte = new Date(params.startDate);
+      }
+      if (params.endDate) {
+        where.createdAt.lte = new Date(params.endDate);
+      }
+    }
+
+    if (params.search) {
+      where.user = {
+        OR: [
+          { phone: { contains: params.search } },
+          { email: { contains: params.search } },
+          { firstName: { contains: params.search } },
+          { lastName: { contains: params.search } },
+        ],
+      };
+    }
+
+    const [payments, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              phone: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          plan: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      }),
+      this.prisma.payment.count({ where }),
+    ]);
+
+    return {
+      payments,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
   }
 
   /**

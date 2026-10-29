@@ -4,6 +4,7 @@ import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth'
 import { body, validationResult } from 'express-validator';
 import sessionService from '../services/sessionService';
 import routerService from '../services/routerService';
+import paymentService from '../services/paymentService';
 
 
 const router = express.Router();
@@ -310,46 +311,11 @@ router.post('/sessions/:id/terminate', async (req: AuthRequest, res: Response) =
 // Get payments
 router.get('/payments', async (req: AuthRequest, res: Response) => {
   try {
-    const { page = 1, limit = 20, status } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
-
-    const where = status ? { status: status as any } : {};
-
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where,
-        skip,
-        take: Number(limit),
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              phone: true,
-              firstName: true,
-              lastName: true
-            }
-          },
-          plan: {
-            select: {
-              name: true
-            }
-          }
-        }
-      }),
-      prisma.payment.count({ where })
-    ]);
+    const result = await paymentService.listPayments(req.query as any);
 
     res.json({
       success: true,
-      data: {
-        payments,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total,
-          pages: Math.ceil(total / Number(limit))
-        }
-      }
+      data: result
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get payments' });
