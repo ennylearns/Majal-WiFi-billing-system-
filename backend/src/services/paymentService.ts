@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PaymentGateway, PaystackGateway } from './paymentGateway';
+import sessionServiceInstance, { SessionService } from './sessionService';
+import smsServiceInstance from './smsService';
 import { prisma as defaultPrisma } from '../database/db';
 
 // Minimal shape returned by Prisma user queries used inside this service.
@@ -33,6 +35,27 @@ export interface InitiatePaymentResult {
   authorization_url?: string;
 }
 
+export interface CheckStatusResult {
+  status: string;
+  amount?: number;
+  sessionToken?: string;
+  payment?: any;
+}
+
+export interface FulfillPaymentResult {
+  payment: any;
+  sessionToken?: string;
+  alreadyFulfilled: boolean;
+}
+
+export interface SessionServiceLike {
+  createSession(userId: string, planId: string, sessionToken: string): Promise<any>;
+}
+
+export interface SmsServiceLike {
+  sendPaymentConfirmation(phone: string, amount: number, receiptNumber: string): Promise<boolean>;
+}
+
 // ---------------------------------------------------------------------------
 // PaymentService
 // ---------------------------------------------------------------------------
@@ -40,13 +63,20 @@ export interface InitiatePaymentResult {
 export class PaymentService {
   private prisma: PrismaClient;
   private gateway: PaymentGateway;
+  private sessionService: SessionServiceLike;
+  private smsService: SmsServiceLike;
+  private inFlightFulfillments = new Map<string, Promise<FulfillPaymentResult>>();
 
   constructor(
     prismaClient: PrismaClient = defaultPrisma,
-    gateway: PaymentGateway = new PaystackGateway()
+    gateway: PaymentGateway = new PaystackGateway(),
+    sessionService: SessionServiceLike = sessionServiceInstance,
+    smsService: SmsServiceLike = smsServiceInstance
   ) {
     this.prisma = prismaClient;
     this.gateway = gateway;
+    this.sessionService = sessionService;
+    this.smsService = smsService;
   }
 
   /**
@@ -95,12 +125,12 @@ export class PaymentService {
       email: gatewayEmail,
       amount,
       planId,
-      paymentId: payment.id,
+      paymentId: (payment as any).id,
     });
 
     // 6. Stamp the gateway reference onto the payment record.
     await this.prisma.payment.update({
-      where: { id: payment.id },
+      where: { id: (payment as any).id },
       data: { checkoutRequestId: gatewayResult.reference },
     });
 
@@ -111,6 +141,253 @@ export class PaymentService {
         ? { authorization_url: gatewayResult.authorization_url }
         : {}),
     };
+  }
+
+  /**
+   * Handle incoming payment gateway webhooks.
+   *
+   * Verifies the cryptographic HMAC signature, parses the payload, and
+   * triggers atomic fulfillment for successful charge events.
+   */
+  async handleWebhook(
+    rawBody: string | Buffer | any,
+    signature: string
+  ): Promise<{ received: boolean }> {
+    const isValid = this.gateway.verifyWebhookSignature(rawBody, signature);
+    if (!isValid) {
+      throw new Error('Invalid webhook signature');
+    }
+
+    const payload =
+      typeof rawBody === 'string' || Buffer.isBuffer(rawBody)
+        ? JSON.parse(rawBody.toString())
+        : rawBody;
+
+    if (payload.event === 'charge.success') {
+      const reference = payload.data?.reference;
+      const paymentId = payload.data?.metadata?.paymentId;
+
+      if (reference) {
+        try {
+          await this.fulfillPayment(reference);
+          return { received: true };
+        } catch (err: any) {
+          if (err.message !== 'Payment not found' || !paymentId) {
+            throw err;
+          }
+        }
+      }
+
+      if (paymentId) {
+        await this.fulfillPayment(paymentId, reference);
+      }
+    }
+
+    return { received: true };
+  }
+
+  /**
+   * Check payment status by checkout reference or payment ID.
+   *
+   * If the payment is still PENDING in the database, queries the payment gateway.
+   * If the gateway confirms settlement, fulfills the payment and returns the active session token.
+   */
+  async checkStatus(reference: string): Promise<CheckStatusResult> {
+    const payment = await this.findPayment(reference);
+
+    if (!payment) {
+      throw new Error('Payment not found');
+    }
+
+    if (payment.status === 'COMPLETED') {
+      const fulfillment = await this.fulfillPayment(reference);
+      return {
+        status: 'completed',
+        amount: payment.amount,
+        sessionToken: fulfillment.sessionToken,
+        payment: fulfillment.payment,
+      };
+    }
+
+    // Payment is pending - query gateway
+    const verifyResult = await this.gateway.verifyTransaction(reference);
+    if (verifyResult.status === 'success') {
+      const fulfillment = await this.fulfillPayment(reference);
+      return {
+        status: 'completed',
+        amount: payment.amount,
+        sessionToken: fulfillment.sessionToken,
+        payment: fulfillment.payment,
+      };
+    }
+
+    return {
+      status: payment.status.toLowerCase(),
+      amount: payment.amount,
+      payment,
+    };
+  }
+
+  /**
+   * Atomically and idempotently fulfill a payment.
+   *
+   * Uses in-flight deduplication and an atomic database check-and-set
+   * (PENDING -> COMPLETED). Exactly one execution provisions a network session
+   * and sends an SMS receipt. Concurrent and duplicate calls return the active
+   * session safely.
+   */
+  async fulfillPayment(
+    referenceOrId: string,
+    gatewayReference?: string
+  ): Promise<FulfillPaymentResult> {
+    const payment = await this.findPayment(referenceOrId);
+    if (!payment) {
+      throw new Error('Payment not found');
+    }
+
+    const dedupeKey = payment.id;
+    const inFlight = this.inFlightFulfillments.get(dedupeKey);
+    if (inFlight) {
+      return await inFlight;
+    }
+
+    const promise = (async () => {
+      try {
+        return await this.doFulfillPayment(payment, referenceOrId, gatewayReference);
+      } finally {
+        this.inFlightFulfillments.delete(dedupeKey);
+      }
+    })();
+
+    this.inFlightFulfillments.set(dedupeKey, promise);
+    return await promise;
+  }
+
+  private async doFulfillPayment(
+    payment: any,
+    referenceOrId: string,
+    gatewayReference?: string
+  ): Promise<FulfillPaymentResult> {
+    const finalReference =
+      gatewayReference || payment.paymentReference || payment.checkoutRequestId || referenceOrId;
+
+    if (payment.status === 'COMPLETED') {
+      const existingSession = await this.findActiveSession(payment.userId, payment.planId);
+
+      return {
+        payment,
+        sessionToken: existingSession?.sessionToken,
+        alreadyFulfilled: true,
+      };
+    }
+
+    // Attempt atomic conditional transition: PENDING -> COMPLETED
+    let transitioned = false;
+    const performTransition = async (txPrisma: any) => {
+      const result = await txPrisma.payment.updateMany({
+        where: {
+          id: payment.id,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'COMPLETED',
+          paymentReference: finalReference,
+        },
+      });
+      return result.count > 0;
+    };
+
+    if (typeof (this.prisma as any).$transaction === 'function') {
+      transitioned = await (this.prisma as any).$transaction(async (tx: any) =>
+        performTransition(tx)
+      );
+    } else {
+      transitioned = await performTransition(this.prisma);
+    }
+
+    if (!transitioned) {
+      // Lost the race or already transitioned concurrently
+      const existingSession = await this.findActiveSession(payment.userId, payment.planId);
+
+      return {
+        payment: {
+          ...payment,
+          status: 'COMPLETED',
+          paymentReference: finalReference,
+        },
+        sessionToken: existingSession?.sessionToken,
+        alreadyFulfilled: true,
+      };
+    }
+
+    // Winner of the transition: provision network session and dispatch receipt SMS
+    let existingSession = await this.findActiveSession(payment.userId, payment.planId);
+
+    let sessionToken = existingSession?.sessionToken;
+    if (!sessionToken) {
+      sessionToken = this.generateSessionToken();
+      await this.sessionService.createSession(
+        payment.userId,
+        payment.planId,
+        sessionToken
+      );
+    }
+
+    const phone = payment.user?.phone;
+    if (phone && this.smsService?.sendPaymentConfirmation) {
+      try {
+        await this.smsService.sendPaymentConfirmation(
+          phone,
+          payment.amount,
+          finalReference
+        );
+      } catch (err) {
+        console.error('Failed to dispatch payment confirmation SMS:', err);
+      }
+    }
+
+    return {
+      payment: {
+        ...payment,
+        status: 'COMPLETED',
+        paymentReference: finalReference,
+      },
+      sessionToken,
+      alreadyFulfilled: false,
+    };
+  }
+
+  private async findPayment(referenceOrId: string) {
+    return this.prisma.payment.findFirst({
+      where: {
+        OR: [
+          { checkoutRequestId: referenceOrId },
+          { paymentReference: referenceOrId },
+          { id: referenceOrId },
+        ],
+      },
+      include: { user: true, plan: true },
+    });
+  }
+
+  private async findActiveSession(userId: string, planId: string) {
+    return this.prisma.session.findFirst({
+      where: {
+        userId,
+        planId,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  /**
+   * Generate random alphanumeric token for router hotspot session.
+   */
+  generateSessionToken(): string {
+    return (
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15)
+    );
   }
 
   // ---------------------------------------------------------------------------

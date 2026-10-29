@@ -4,11 +4,11 @@
 
 **Blocked by:** 01: Extract Payment Gateway Adapter Seam
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Core payment service receives plan selection, amount, and optional customer contact details
-- [ ] Service finds existing customer by phone/email or creates a new guest customer record inside the initiation flow
-- [ ] Service creates a pending payment record associated with the customer and selected plan
-- [ ] Service invokes the payment gateway adapter to request a checkout transaction reference and access code
-- [ ] Service records the returned gateway reference on the payment record and returns authorization details
-- [ ] Tests verify successful initiation, guest creation, and inactive plan rejection using the fake gateway adapter
+- [x] Core payment service receives plan selection, amount, and optional customer contact details
+- [x] Service finds existing customer by phone/email or creates a new guest customer record inside the initiation flow
+- [x] Service creates a pending payment record associated with the customer and selected plan
+- [x] Service invokes the payment gateway adapter to request a checkout transaction reference and access code
+- [x] Service records the returned gateway reference on the payment record and returns authorization details
+- [x] Tests verify successful initiation, guest creation, and inactive plan rejection using the fake gateway adapter
