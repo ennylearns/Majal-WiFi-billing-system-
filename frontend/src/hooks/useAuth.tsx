@@ -1,8 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { adminAPI } from '../services/api'
 import type { User } from '../types'
 
-export const useAuth = () => {
+interface AuthContextType {
+  user: User | null
+  loading: boolean
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  logout: () => void
+  isAuthenticated: boolean
+  isAdmin: boolean
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const initialized = useRef(false)
@@ -39,7 +50,6 @@ export const useAuth = () => {
                 localStorage.removeItem('last_token_verified')
                 setUser(null)
               }
-              // For rate limiting (429) or other errors, keep the user logged in
             }
           }
         }
@@ -57,11 +67,11 @@ export const useAuth = () => {
     try {
       const response = await adminAPI.login({ email, password })
       if (response.success && response.data) {
-        const { user, token } = response.data
+        const { user: loggedInUser, token } = response.data
         localStorage.setItem('auth_token', token)
-        localStorage.setItem('user', JSON.stringify(user))
+        localStorage.setItem('user', JSON.stringify(loggedInUser))
         localStorage.setItem('last_token_verified', Date.now().toString())
-        setUser(user)
+        setUser(loggedInUser)
         return { success: true }
       }
       return { success: false, error: 'Login failed' }
@@ -81,14 +91,29 @@ export const useAuth = () => {
     initialized.current = false
   }, [])
 
-  return {
-    user,
-    loading,
-    login,
-    logout,
-    isAuthenticated: !!user,
-    isAdmin: user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        isAuthenticated: !!user,
+        isAdmin: user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider')
   }
+  return context
 }
 
 export default useAuth
+

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Wifi, Lock, Mail, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
@@ -10,6 +10,7 @@ const AdminLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const { login, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
 
   if (isAuthenticated) {
     return <Navigate to="/admin" replace />
@@ -23,6 +24,7 @@ const AdminLogin: React.FC = () => {
       const result = await login(email, password)
       if (result.success) {
         toast.success('Login successful!')
+        navigate('/admin', { replace: true })
       } else {
         toast.error(result.error || 'Login failed')
       }

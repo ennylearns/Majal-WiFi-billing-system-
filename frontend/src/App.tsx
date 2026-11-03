@@ -2,9 +2,9 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import CustomerPortal from './pages/CustomerPortal'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLogin from './pages/AdminLogin'
-import { useAuth } from './hooks/useAuth'
+import { AuthProvider, useAuth } from './hooks/useAuth'
 
-function App() {
+function AppRoutes() {
   const { user, loading } = useAuth()
 
   if (loading) {
@@ -37,6 +37,14 @@ function App() {
       {/* Catch all route */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   )
 }
 
