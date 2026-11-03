@@ -3,11 +3,18 @@ import { prisma } from '../database/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import paystackService from '../services/paystackService';
 import sessionService from '../services/sessionService';
 import smsService from '../services/smsService';
+import paymentsRouter from './payments';
 
 const router = express.Router();
+
+// Forward all /payment/* subpaths to the consolidated payments route module.
+// This preserves the existing public URL contracts:
+//   POST   /api/public/payment              → initiate payment
+//   GET    /api/public/payment/status/:ref  → check payment status
+//   POST   /api/public/payment/paystack/webhook → Paystack webhook
+router.use('/payment', paymentsRouter);
 
 // Get all active routers (public location info only)
 router.get('/routers', async (req: Request, res: Response) => {
@@ -70,7 +77,7 @@ router.get('/plans', async (req: Request, res: Response) => {
         }
       }
     });
-    
+
     res.json({ success: true, data: plans });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch plans' });
@@ -103,9 +110,9 @@ router.post('/register', [
     });
 
     if (existingUser) {
-      return res.status(409).json({ 
-        success: false, 
-        error: 'User with this phone number or email already exists' 
+      return res.status(409).json({
+        success: false,
+        error: 'User with this phone number or email already exists'
       });
     }
 
@@ -202,148 +209,6 @@ router.post('/login', [
   }
 });
 
-// Initiate payment
-router.post('/payment', [
-  body('phone').optional().isMobilePhone('any').withMessage('Valid phone number required'),
-  body('planId').isUUID().withMessage('Valid plan ID required'),
-  body('amount').isFloat({ min: 1 }).withMessage('Valid amount required'),
-  body('email').optional().isEmail().withMessage('Valid email required')
-], async (req: Request, res: Response) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const { phone: inputPhone, planId, amount, email } = req.body;
-    const phone = inputPhone || `+254700${Math.floor(100000 + Math.random() * 900000)}`;
-
-    // Get or create user
-    let user = null;
-    if (inputPhone) {
-      user = await prisma.user.findUnique({
-        where: { phone: inputPhone }
-      });
-    }
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          phone,
-          email: email || undefined,
-          role: 'CUSTOMER'
-        }
-      });
-    }
-
-    // Verify plan exists
-    const plan = await prisma.plan.findUnique({
-      where: { id: planId }
-    });
-
-    if (!plan || !plan.isActive) {
-      return res.status(404).json({ success: false, error: 'Plan not found or inactive' });
-    }
-
-    // Create payment record in PENDING status
-    const payment = await prisma.payment.create({
-      data: {
-        userId: user.id,
-        planId,
-        amount,
-        status: 'PENDING'
-      }
-    });
-
-    // Initiate Paystack transaction
-    const customerEmail = email || user.email || `${phone.replace(/[^0-9]/g, '')}@collospot.com`;
-    const paystackResponse = await paystackService.initiateTransaction(
-      customerEmail,
-      amount,
-      plan.id,
-      payment.id
-    );
-
-    // Update payment with checkout request ID set to Paystack reference
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        checkoutRequestId: paystackResponse.reference
-      }
-    });
-
-    res.json({
-      success: true,
-      data: {
-        reference: paystackResponse.reference,
-        access_code: paystackResponse.access_code
-      },
-      reference: paystackResponse.reference,
-      access_code: paystackResponse.access_code
-    });
-  } catch (error) {
-    console.error('Payment initiation error:', error);
-    res.status(500).json({ success: false, error: 'Payment initiation failed' });
-  }
-});
-
-// Check payment status
-router.get('/payment/status/:checkoutRequestId', async (req: Request, res: Response) => {
-  try {
-    const { checkoutRequestId } = req.params;
-
-    const payment = await prisma.payment.findFirst({
-      where: {
-        OR: [
-          { checkoutRequestId },
-          { paymentReference: checkoutRequestId }
-        ]
-      },
-      include: { user: true, plan: true }
-    });
-
-    if (!payment) {
-      return res.status(404).json({ success: false, error: 'Payment not found' });
-    }
-
-    // If payment is completed, ensure session exists and return sessionToken
-    if (payment.status === 'COMPLETED') {
-      const existingSession = await prisma.session.findFirst({
-        where: {
-          userId: payment.userId,
-          planId: payment.planId,
-          status: 'ACTIVE'
-        }
-      });
-
-      let sessionToken = existingSession?.sessionToken;
-      if (!sessionToken) {
-        sessionToken = generateSessionToken();
-        await sessionService.createSession(payment.userId, payment.planId, sessionToken);
-      }
-
-      return res.json({
-        success: true,
-        data: {
-          status: 'completed',
-          sessionToken
-        }
-      });
-    }
-
-    res.json({
-      success: true,
-      data: {
-        status: payment.status.toLowerCase(),
-        amount: payment.amount
-      }
-    });
-  } catch (error) {
-    console.error('Payment status check error:', error);
-    res.status(500).json({ success: false, error: 'Failed to check payment status' });
-  }
-});
-
 // Connect to internet
 router.post('/connect', [
   body('sessionToken').notEmpty().withMessage('Session token required')
@@ -352,7 +217,7 @@ router.post('/connect', [
     const { sessionToken } = req.body;
 
     const session = await sessionService.getActiveSession(sessionToken);
-    
+
     if (!session) {
       return res.status(401).json({ success: false, error: 'Invalid or expired session' });
     }
@@ -373,22 +238,5 @@ router.post('/connect', [
     res.status(500).json({ success: false, error: 'Connection failed' });
   }
 });
-
-// Paystack webhook
-router.post('/payment/paystack/webhook', async (req: Request, res: Response) => {
-  try {
-    const signature = (req.headers['x-paystack-signature'] as string) || '';
-    const rawBody = (req as any).rawBody || req.body;
-    await paystackService.handleWebhook(rawBody, signature);
-  } catch (error) {
-    console.error('Paystack webhook error:', error);
-  }
-  res.status(200).send('OK');
-});
-
-// Helper function
-function generateSessionToken(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
 
 export default router;
