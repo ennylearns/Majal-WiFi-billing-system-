@@ -4,11 +4,11 @@
 
 **Blocked by:** 03: Implement Atomic Idempotent Fulfillment and Webhook Ingestion, 04: Implement Customer Payment History and Admin Listing
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] Consolidate payment endpoints (initiate, status, webhook, customer history, payment detail) into the dedicated payments route module
-- [ ] Ensure route controllers serve only as HTTP transport adapters (validating inputs, passing parameters to the payment service, returning status codes)
-- [ ] Configure public route router to forward `/payment/*` subpaths to the payments route module, maintaining existing URL contracts
-- [ ] Verify frontend API calls (`/public/payment`, `/payments`, `/admin/payments`) and Paystack webhook callbacks function without URL breakage
-- [ ] Purge redundant, obsolete database queries and dead payment code from public and administrative route modules
-- [ ] Full end-to-end integration test suite passes across all payment endpoints
+- [x] Consolidate payment endpoints (initiate, status, webhook, customer history, payment detail) into the dedicated payments route module
+- [x] Ensure route controllers serve only as HTTP transport adapters (validating inputs, passing parameters to the payment service, returning status codes)
+- [x] Configure public route router to forward `/payment/*` subpaths to the payments route module, maintaining existing URL contracts
+- [x] Verify frontend API calls (`/public/payment`, `/payments`, `/admin/payments`) and Paystack webhook callbacks function without URL breakage
+- [x] Purge redundant, obsolete database queries and dead payment code from public and administrative route modules
+- [x] Full end-to-end integration test suite passes across all payment endpoints
