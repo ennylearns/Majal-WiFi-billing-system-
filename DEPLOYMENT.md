@@ -33,13 +33,6 @@ WIREGUARD_SERVER_ENDPOINT="vpn.example.com:51820"
 WIREGUARD_SERVER_PUBLIC_KEY="your-wireguard-server-public-key"
 WIREGUARD_SUBNET="10.250.0.0/24"
 
-# Legacy MikroTik Startup Seed (Optional)
-# NOTE: Only used for a one-time database seed on first run if no routers exist.
-# Active routers and credentials are managed directly in the Admin UI (/admin -> Routers).
-MIKROTIK_HOST="192.168.1.1"
-MIKROTIK_USERNAME="admin"
-MIKROTIK_PASSWORD="your-router-password"
-MIKROTIK_PORT="8728"
 
 # SMS Service
 AFRICASTALKING_API_KEY="your-api-key"

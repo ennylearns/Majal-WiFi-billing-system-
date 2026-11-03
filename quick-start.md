@@ -29,7 +29,7 @@ cd backend
 npm run db:push
 npm run db:seed
 ```
-> **Note:** If `MIKROTIK_HOST` is set in your `backend/.env`, the system automatically seeds a "Default Router" in the database during startup and binds existing seed plans to it. Additional routers can be added at any time via the Admin Dashboard.
+> **Note:** Routers and their credentials are created and managed dynamically in the database via the Admin Dashboard (/admin -> Routers). Seed plans can be assigned to your configured router via the Admin Plans interface.
 
 ### 3. Start Both Servers
 ```bash

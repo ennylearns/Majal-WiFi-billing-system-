@@ -1,8 +1,9 @@
 import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { RouterOSAPI } from 'node-routeros';
-import { SessionService } from '../sessionService';
+import { SessionService, sessionCleanup } from '../sessionService';
 import { MikrotikService } from '../mikrotikService';
+import smsService from '../smsService';
 
 // ---------------------------------------------------------------------------
 // RouterOSAPI stubs (same pattern as mikrotikService.test.ts)
@@ -185,5 +186,131 @@ describe('SessionService - custom Prisma client injection', () => {
 
     assert.deepEqual(callsA, ['A']);
     assert.deepEqual(callsB, ['B']);
+  });
+});
+
+describe('SessionService.terminateSession - MikroTik timeout & resilience', () => {
+  test('terminates DB session and does not throw when MikroTik router times out', async () => {
+    let updatedStatus: string | null = null;
+    const mockPrisma = {
+      session: {
+        findUnique: async () => ({
+          id: 'sess-timeout',
+          sessionToken: 'token-timeout',
+          routerId: 'router-offline',
+          plan: null,
+        }),
+        update: async ({ data }: any) => {
+          updatedStatus = data.status;
+          return {};
+        },
+      },
+      router: {
+        findUnique: async () => ({
+          id: 'router-offline',
+          host: '10.250.0.99',
+          port: 8728,
+          username: 'admin',
+          password: 'pw',
+        }),
+      },
+    } as any;
+
+    const mockMikrotikFactory = () => ({
+      removeHotspotUser: async () => {
+        const timeoutErr = new Error('RosException: Timed out after 10 seconds');
+        (timeoutErr as any).errno = 'SOCKTMOUT';
+        throw timeoutErr;
+      },
+    } as any);
+
+    const svc = new SessionService(mockPrisma, mockMikrotikFactory);
+    // Should NOT throw
+    await svc.terminateSession('sess-timeout');
+    assert.equal(updatedStatus, 'TERMINATED');
+  });
+
+  test('terminates DB session when router record is missing', async () => {
+    let updatedStatus: string | null = null;
+    const mockPrisma = {
+      session: {
+        findUnique: async () => ({
+          id: 'sess-no-router',
+          sessionToken: 'token-no-router',
+          routerId: null,
+          plan: null,
+        }),
+        update: async ({ data }: any) => {
+          updatedStatus = data.status;
+          return {};
+        },
+      },
+    } as any;
+
+    const svc = new SessionService(mockPrisma);
+    await svc.terminateSession('sess-no-router');
+    assert.equal(updatedStatus, 'TERMINATED');
+  });
+
+  test('throws when session does not exist in DB', async () => {
+    const mockPrisma = {
+      session: {
+        findUnique: async () => null,
+      },
+    } as any;
+
+    const svc = new SessionService(mockPrisma);
+    await assert.rejects(
+      async () => svc.terminateSession('nonexistent-id'),
+      /Session not found/
+    );
+  });
+});
+
+describe('sessionCleanup - batch resilience', () => {
+  test('continues processing remaining sessions even if one termination fails', async () => {
+    const terminatedSessionIds: string[] = [];
+    const smsSentToPhones: string[] = [];
+
+    const mockPrisma = {
+      session: {
+        findMany: async () => [
+          { id: 'sess-fail', userId: 'user-1' },
+          { id: 'sess-ok', userId: 'user-2' },
+        ],
+      },
+      user: {
+        findUnique: async ({ where }: any) => {
+          if (where.id === 'user-1') return { id: 'user-1', phone: '+254700000001' };
+          if (where.id === 'user-2') return { id: 'user-2', phone: '+254700000002' };
+          return null;
+        },
+      },
+    } as any;
+
+    const mockSessionService = {
+      terminateSession: async (id: string) => {
+        if (id === 'sess-fail') {
+          throw new Error('Database locked / unexpected failure');
+        }
+        terminatedSessionIds.push(id);
+      },
+    } as any;
+
+    const origSendSMS = smsService.sendSMS;
+    smsService.sendSMS = async (phone: string) => {
+      smsSentToPhones.push(phone);
+      return true;
+    };
+
+    try {
+      await sessionCleanup(mockSessionService, mockPrisma);
+
+      // sess-ok should have been processed despite sess-fail erroring
+      assert.deepEqual(terminatedSessionIds, ['sess-ok']);
+      assert.deepEqual(smsSentToPhones, ['+254700000002']);
+    } finally {
+      smsService.sendSMS = origSendSMS;
+    }
   });
 });

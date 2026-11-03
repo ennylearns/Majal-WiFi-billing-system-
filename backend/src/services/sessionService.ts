@@ -3,13 +3,15 @@ import { MikrotikService } from './mikrotikService';
 import smsService from './smsService';
 import { prisma as defaultPrisma } from '../database/db';
 
-/** Build a MikrotikService from a Router DB record. */
-function mikrotikServiceForRouter(router: {
+export type MikrotikRouterRecord = {
   host: string;
   port: number;
   username: string;
   password: string;
-}): MikrotikService {
+};
+
+/** Build a MikrotikService from a Router DB record. */
+function mikrotikServiceForRouter(router: MikrotikRouterRecord): MikrotikService {
   return new MikrotikService({
     host: router.host,
     port: router.port,
@@ -20,9 +22,14 @@ function mikrotikServiceForRouter(router: {
 
 export class SessionService {
   private prisma: PrismaClient;
+  private mikrotikFactory: (router: MikrotikRouterRecord) => MikrotikService;
 
-  constructor(prismaClient: PrismaClient = defaultPrisma) {
+  constructor(
+    prismaClient: PrismaClient = defaultPrisma,
+    mikrotikFactory: (router: MikrotikRouterRecord) => MikrotikService = mikrotikServiceForRouter
+  ) {
     this.prisma = prismaClient;
+    this.mikrotikFactory = mikrotikFactory;
   }
 
   async createSession(userId: string, planId: string, sessionToken: string): Promise<any> {
@@ -59,7 +66,7 @@ export class SessionService {
       });
 
       // Create MikroTik user profile and hotspot user on the plan's router
-      const mikrotik = mikrotikServiceForRouter(plan.router);
+      const mikrotik = this.mikrotikFactory(plan.router);
       const profileName = `plan_${plan.id}`;
       const speedLimit = this.parseSpeedLimit(plan.speedLimit);
       const sessionTimeout = mikrotik.formatSessionTimeout(plan.duration);
@@ -97,7 +104,7 @@ export class SessionService {
 
       // Resolve the router to use: prefer routerId stored on session,
       // fall back to the plan's current router (handles legacy rows).
-      let router: { host: string; port: number; username: string; password: string } | null = null;
+      let router: MikrotikRouterRecord | null = null;
 
       if (session.routerId) {
         router = await this.prisma.router.findUnique({ where: { id: session.routerId } });
@@ -107,7 +114,7 @@ export class SessionService {
         router = session.plan.router;
       }
 
-      // Update session status
+      // Update session status in DB
       await this.prisma.session.update({
         where: { id: sessionId },
         data: {
@@ -117,8 +124,12 @@ export class SessionService {
       });
 
       if (router) {
-        const mikrotik = mikrotikServiceForRouter(router);
-        await mikrotik.removeHotspotUser(session.sessionToken);
+        try {
+          const mikrotik = this.mikrotikFactory(router);
+          await mikrotik.removeHotspotUser(session.sessionToken);
+        } catch (routerError) {
+          console.warn(`⚠️ Failed to remove hotspot user ${session.sessionToken} on router ${router.host}:`, routerError);
+        }
       } else {
         console.warn(`Session ${sessionId} has no router reference; skipping MikroTik cleanup`);
       }
@@ -200,9 +211,13 @@ export class SessionService {
 }
 
 // Cleanup expired sessions - each session uses its own per-router MikrotikService
-export const sessionCleanup = async (): Promise<void> => {
+export const sessionCleanup = async (
+  sessionServiceInstance?: SessionService,
+  prismaClient: PrismaClient = defaultPrisma
+): Promise<void> => {
+  const service = sessionServiceInstance ?? defaultSessionService;
   try {
-    const expiredSessions = await defaultPrisma.session.findMany({
+    const expiredSessions = await prismaClient.session.findMany({
       where: {
         status: 'ACTIVE',
         endTime: {
@@ -211,28 +226,39 @@ export const sessionCleanup = async (): Promise<void> => {
       },
     });
 
+    let cleanedCount = 0;
     for (const session of expiredSessions) {
-      await new SessionService().terminateSession(session.id);
+      try {
+        await service.terminateSession(session.id);
 
-      // Send expiry notification
-      const user = await defaultPrisma.user.findUnique({
-        where: { id: session.userId },
-      });
+        // Send expiry notification
+        const user = await prismaClient.user.findUnique({
+          where: { id: session.userId },
+        });
 
-      if (user) {
-        await smsService.sendSMS(
-          user.phone,
-          'Your internet session has expired. Purchase a new plan to continue browsing. - COLLOSPOT'
-        );
+        if (user) {
+          try {
+            await smsService.sendSMS(
+              user.phone,
+              'Your internet session has expired. Purchase a new plan to continue browsing. - COLLOSPOT'
+            );
+          } catch (smsError) {
+            console.warn(`Failed to send expiration SMS for session ${session.id}:`, smsError);
+          }
+        }
+        cleanedCount++;
+      } catch (sessionError) {
+        console.error(`Failed to cleanup expired session ${session.id}:`, sessionError);
       }
     }
 
     if (expiredSessions.length > 0) {
-      console.log(`🧹 Cleaned up ${expiredSessions.length} expired sessions`);
+      console.log(`🧹 Cleaned up ${cleanedCount}/${expiredSessions.length} expired sessions`);
     }
   } catch (error) {
     console.error('Error during session cleanup:', error);
   }
 };
 
-export default new SessionService();
+const defaultSessionService = new SessionService();
+export default defaultSessionService;

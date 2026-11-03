@@ -26,20 +26,17 @@ export class MikrotikService {
   public readonly password: string;
   public readonly port: number;
 
-  constructor(credentials?: MikrotikCredentials, api?: RouterOSAPI) {
-    if (credentials) {
-      this.host = credentials.host;
-      this.username = credentials.username;
-      this.password = credentials.password ?? '';
-      this.port = typeof credentials.port === 'string'
-        ? parseInt(credentials.port, 10)
-        : (credentials.port ?? 8728);
-    } else {
-      this.host = process.env.MIKROTIK_HOST || '192.168.1.1';
-      this.username = process.env.MIKROTIK_USERNAME || 'admin';
-      this.password = process.env.MIKROTIK_PASSWORD || '';
-      this.port = parseInt(process.env.MIKROTIK_PORT || '8728', 10);
+  constructor(credentials: MikrotikCredentials, api?: RouterOSAPI) {
+    if (!credentials || !credentials.host?.trim() || !credentials.username?.trim()) {
+      throw new Error('MikrotikService requires explicit credentials (host and username are required)');
     }
+
+    this.host = credentials.host.trim();
+    this.username = credentials.username.trim();
+    this.password = credentials.password ?? '';
+    this.port = typeof credentials.port === 'string'
+      ? parseInt(credentials.port, 10)
+      : (credentials.port ?? 8728);
 
     this.api = api || new RouterOSAPI({
       host: this.host,
@@ -221,4 +218,4 @@ export class MikrotikService {
   formatSessionTimeout(hours: number): string {
     return `${hours * 3600}s`;
   }
-}
+}

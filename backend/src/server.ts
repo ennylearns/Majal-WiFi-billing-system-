@@ -14,7 +14,6 @@ import publicRoutes from './routes/public';
 
 import { errorHandler } from './middleware/errorHandler';
 import { sessionCleanup } from './services/sessionService';
-import { seedDefaultRouter } from './services/routerSeedService';
 
 dotenv.config();
 
@@ -69,14 +68,9 @@ cron.schedule('*/5 * * * *', () => {
   sessionCleanup();
 });
 
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`🚀 COLLOSPOT Server running on port ${PORT}`);
   console.log(`📱 Environment: ${process.env.NODE_ENV}`);
-  try {
-    await seedDefaultRouter();
-  } catch (error) {
-    console.error('❌ Failed to seed default router on startup:', error);
-  }
 });
 
 export default app;

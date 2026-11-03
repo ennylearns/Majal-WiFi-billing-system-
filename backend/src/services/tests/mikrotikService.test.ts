@@ -52,13 +52,25 @@ describe('MikrotikService - Constructor and Credentials', () => {
     assert.equal(service.api.port, 8729);
   });
 
-  test('default constructor falls back to environment variables', () => {
-    const service = new MikrotikService();
+  test('constructor throws when credentials are not provided', () => {
+    assert.throws(
+      () => new (MikrotikService as any)(),
+      /MikrotikService requires explicit credentials/
+    );
+  });
 
-    assert.equal(service.host, 'env-host.router');
-    assert.equal(service.port, 9876);
-    assert.equal(service.username, 'env-user');
-    assert.equal(service.password, 'env-password');
+  test('constructor throws when host is empty or whitespace', () => {
+    assert.throws(
+      () => new MikrotikService({ host: '   ', username: 'admin' }),
+      /MikrotikService requires explicit credentials/
+    );
+  });
+
+  test('constructor throws when username is empty or whitespace', () => {
+    assert.throws(
+      () => new MikrotikService({ host: '192.168.1.1', username: '   ' }),
+      /MikrotikService requires explicit credentials/
+    );
   });
 });
 
