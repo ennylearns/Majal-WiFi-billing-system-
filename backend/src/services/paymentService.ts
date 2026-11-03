@@ -124,11 +124,12 @@ export class PaymentService {
 
     // 3. Derive the email that will be forwarded to the payment gateway.
     //    Prefer the supplied email; fall back to the user's stored email;
-    //    synthesise a placeholder from the phone number as a last resort.
+    //    synthesise a placeholder from the user's phone (real or synthetic) as a last resort.
+    const resolvedPhone = phone ?? user.phone ?? '';
     const gatewayEmail =
       email ||
       user.email ||
-      `${phone!.replace(/\D/g, '')}@guest.collospot.com`;
+      `${resolvedPhone.replace(/\D/g, '')}@guest.collospot.com`;
 
     // 4. Create the pending payment record.
     const payment = await this.prisma.payment.create({
@@ -219,25 +220,42 @@ export class PaymentService {
     }
 
     if (payment.status === 'COMPLETED') {
-      const fulfillment = await this.fulfillPayment(reference);
-      return {
-        status: 'completed',
-        amount: payment.amount,
-        sessionToken: fulfillment.sessionToken,
-        payment: fulfillment.payment,
-      };
+      // Best-effort fulfillment (idempotent): if it fails, still return completed status.
+      try {
+        const fulfillment = await this.fulfillPayment(reference);
+        return {
+          status: 'completed',
+          amount: payment.amount,
+          sessionToken: fulfillment.sessionToken,
+          payment: fulfillment.payment,
+        };
+      } catch {
+        return { status: 'completed', amount: payment.amount, payment };
+      }
     }
 
     // Payment is pending - query gateway
     const verifyResult = await this.gateway.verifyTransaction(reference);
     if (verifyResult.status === 'success') {
-      const fulfillment = await this.fulfillPayment(reference);
-      return {
-        status: 'completed',
-        amount: payment.amount,
-        sessionToken: fulfillment.sessionToken,
-        payment: fulfillment.payment,
-      };
+      // Best-effort fulfillment: if session provisioning fails (e.g. router offline),
+      // report the payment as completed — the session can be retried later.
+      try {
+        const fulfillment = await this.fulfillPayment(reference);
+        return {
+          status: 'completed',
+          amount: payment.amount,
+          sessionToken: fulfillment.sessionToken,
+          payment: fulfillment.payment,
+        };
+      } catch {
+        // Re-read from DB so we return the latest persisted status.
+        const refreshed = await this.findPayment(reference);
+        return {
+          status: (refreshed?.status ?? payment.status).toLowerCase(),
+          amount: payment.amount,
+          payment: refreshed ?? payment,
+        };
+      }
     }
 
     return {

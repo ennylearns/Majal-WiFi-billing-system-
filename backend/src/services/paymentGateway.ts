@@ -177,7 +177,7 @@ export class PaystackGateway implements PaymentGateway {
   }
 
   async verifyTransaction(reference: string): Promise<VerifyPaymentResult> {
-    if (process.env.NODE_ENV === 'development' || reference.startsWith('mock_ref_')) {
+    if (reference.startsWith('mock_ref_')) {
       return {
         status: 'success',
         amount: 10000,
