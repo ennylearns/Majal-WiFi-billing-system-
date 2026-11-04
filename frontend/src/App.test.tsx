@@ -9,6 +9,7 @@ vi.mock('./services/api', () => ({
     login: vi.fn(),
     getProfile: vi.fn(),
     getDashboardStats: vi.fn(),
+    getPayments: vi.fn().mockResolvedValue({ success: true, data: { payments: [] } }),
   },
 }))
 
