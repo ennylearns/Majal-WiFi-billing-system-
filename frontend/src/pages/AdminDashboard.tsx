@@ -101,6 +101,7 @@ const AdminDashboard: React.FC = () => {
               <button
                 onClick={() => setSidebarOpen(false)}
                 className="lg:hidden p-1 text-text-muted hover:text-text-primary rounded"
+                aria-label="Close sidebar"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
@@ -126,17 +127,20 @@ const AdminDashboard: React.FC = () => {
           {/* Navigation */}
           <nav className="flex flex-col gap-0.5 py-3 px-2">
             {navigation.map((item) => {
-              const isActive = location.pathname === item.href || 
-                (item.href !== '/admin' && location.pathname.startsWith(item.href))
+              const currentPath = location.pathname.replace(/\/+$/, '') || '/'
+              const itemHref = item.href.replace(/\/+$/, '') || '/'
+              const isActive = currentPath === itemHref || 
+                (itemHref !== '/admin' && currentPath.startsWith(itemHref))
               
               return (
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium border-l-2 transition-colors ${
                     isActive
-                      ? 'bg-primary-light text-[#0045A9] border-l-2 border-[#0045A9]'
-                      : 'text-text-muted hover:bg-surface-canvas hover:text-text-primary'
+                      ? 'bg-primary-light text-[#0045A9] border-[#0045A9]'
+                      : 'border-transparent text-text-muted hover:bg-surface-canvas hover:text-text-primary'
                   }`}
                   onClick={() => setSidebarOpen(false)}
                 >
@@ -169,6 +173,7 @@ const AdminDashboard: React.FC = () => {
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="lg:hidden p-2 text-text-muted hover:text-text-primary hover:bg-surface-dim rounded-lg transition-colors"
+                aria-label="Open sidebar"
               >
                 <span className="material-symbols-outlined text-[20px]">menu</span>
               </button>
@@ -179,6 +184,7 @@ const AdminDashboard: React.FC = () => {
                   <input
                     type="text"
                     placeholder="Search anything..."
+                    aria-label="Search"
                     className="pl-9 pr-4 py-1.5 bg-surface-canvas border border-border-subtle rounded-md text-xs text-text-primary placeholder:text-text-placeholder focus:outline-none focus:border-primary focus:bg-surface-card transition-all w-64"
                   />
                 </div>
@@ -205,8 +211,9 @@ const AdminDashboard: React.FC = () => {
                 disabled={refreshing}
                 className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-dim rounded-md transition-colors disabled:opacity-50"
                 title="Refresh data"
+                aria-label="Refresh data"
               >
-                <span className={`material-symbols-outlined text-[18px] ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
+                <span className={`material-symbols-outlined text-[18px] inline-block ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
               </button>
               
               <button className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-dim rounded-md transition-colors relative" title="Notifications">

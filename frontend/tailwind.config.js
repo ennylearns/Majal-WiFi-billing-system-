@@ -9,6 +9,7 @@ export default {
       colors: {
         // ── Legacy colour scales (kept until ticket 07 migration) ──────────────
         primary: {
+          DEFAULT: '#175CD3',
           50: '#eff6ff',
           100: '#dbeafe',
           200: '#bfdbfe',
