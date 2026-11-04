@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Install `@material-symbols/font-400` npm package and import it in the global CSS entry point so Material Symbols Outlined glyphs render from local assets (not CDN)
-- [ ] Add Google Fonts preconnect links to `index.html` and load Inter (400/500/600/700) and JetBrains Mono (400/500/600) variable weights
-- [ ] Extend `tailwind.config.js` with the full canonical token set — every token name must match what the HTML templates already use so class strings can be lifted without renaming:
+- [x] Install `@material-symbols/font-400` npm package and import it in the global CSS entry point so Material Symbols Outlined glyphs render from local assets (not CDN)
+- [x] Add Google Fonts preconnect links to `index.html` and load Inter (400/500/600/700) and JetBrains Mono (400/500/600) variable weights
+- [x] Extend `tailwind.config.js` with the full canonical token set — every token name must match what the HTML templates already use so class strings can be lifted without renaming:
   - **Surfaces:** `surface-canvas` (#F8FAFC), `surface-card` (#FFFFFF), `surface-dim` (#F1F5F9)
   - **Borders:** `border-subtle` (#E2E8F0), `border-strong` (#CBD5E1)
   - **Text:** `text-primary` (#0F172A), `text-secondary` (#475569), `text-muted` (#64748B), `text-placeholder` (#94A3B8)
@@ -17,7 +17,6 @@
   - **Border radii:** `card` (12px), `control` (8px), `badge` (6px)
   - **Font families:** `sans` → Inter, `mono` → JetBrains Mono
   - **Box shadows:** `card` (ambient 1px elevation), `card-hover` (4px lift), `overlay` (modal/dropdown weight)
-- [ ] Keep the existing legacy colour scales (`primary-50…900`, `success-50…900`) in the config for now — they will be removed in ticket 07 once every component is migrated
-- [ ] Add global CSS utilities in `index.css`: `overscroll-behavior: none` on body; `.tabular-nums` applying `font-feature-settings: "tnum" 1, "cv05" 1`; `.micro-label` applying `text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; font-weight: 600`
-- [ ] All existing tests pass (`npm test` in `frontend/`)
-
+- [x] Keep the existing legacy colour scales (`primary-50…900`, `success-50…900`) in the config for now — they will be removed in ticket 07 once every component is migrated
+- [x] Add global CSS utilities in `index.css`: `overscroll-behavior: none` on body; `.tabular-nums` applying `font-feature-settings: "tnum" 1, "cv05" 1`; `.micro-label` applying `text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; font-weight: 600`
+- [x] All existing tests pass (`npm test` in `frontend/`)
