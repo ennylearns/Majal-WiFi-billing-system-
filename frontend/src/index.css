@@ -1,9 +1,9 @@
+/* Material Symbols Outlined — served from local npm assets */
+@import '@material-symbols/font-400/outlined.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Material Symbols Outlined — served from local npm assets */
-@import '@material-symbols/font-400/outlined.css';
 
 @layer base {
   html {

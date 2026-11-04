@@ -89,7 +89,7 @@ describe('Admin Login Navigation Loop', () => {
 
     // After login, we expect AdminDashboard content, not an infinite redirect crash
     await waitFor(() => {
-      expect(screen.getByText(/Admin Portal/i)).toBeInTheDocument()
+      expect(screen.getByText(/Majal ISP/i)).toBeInTheDocument()
     })
   })
 
@@ -134,7 +134,7 @@ describe('Admin Login Navigation Loop', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(/Admin Portal/i)).toBeInTheDocument()
+      expect(screen.getByText(/Majal ISP/i)).toBeInTheDocument()
     })
   })
 })
