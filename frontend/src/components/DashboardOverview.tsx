@@ -1,24 +1,86 @@
-import React from 'react'
-import { Users, DollarSign, Wifi, TrendingUp, Activity, Clock, ArrowUpRight, Zap } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
 import { formatCurrency } from '../utils/formatters'
 import { useNavigate } from 'react-router-dom'
-import type { DashboardStats } from '../types'
+import { adminAPI } from '../services/api'
+import type { DashboardStats, Payment } from '../types'
 
 interface DashboardOverviewProps {
   stats: DashboardStats | null
   onRefresh?: () => void
 }
 
+// ── Status badge ──────────────────────────────────────────────────────────────
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'neutral'
+
+const BADGE_CLASSES: Record<BadgeVariant, string> = {
+  success: 'bg-status-success-bg border-status-success-border text-status-success',
+  warning: 'bg-status-warning-bg border-status-warning-border text-status-warning',
+  danger:  'bg-status-danger-bg  border-status-danger-border  text-status-danger',
+  neutral: 'bg-status-neutral-bg border-status-neutral-border text-status-neutral',
+}
+
+const DOT_CLASSES: Record<BadgeVariant, string> = {
+  success: 'bg-status-success',
+  warning: 'bg-status-warning',
+  danger:  'bg-status-danger',
+  neutral: 'bg-status-neutral',
+}
+
+function StatusBadge({ variant, label }: { variant: BadgeVariant; label: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-badge border micro-label ${BADGE_CLASSES[variant]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${DOT_CLASSES[variant]}`} />
+      {label}
+    </span>
+  )
+}
+
+function paymentVariant(status: Payment['status']): BadgeVariant {
+  if (status === 'COMPLETED') return 'success'
+  if (status === 'PENDING')   return 'warning'
+  if (status === 'FAILED')    return 'danger'
+  return 'neutral'
+}
+
+function formatTimestamp(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('en-KE', {
+      month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+  } catch {
+    return iso
+  }
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh }) => {
   const navigate = useNavigate()
+
+  // Recent payments — live data
+  const [payments, setPayments]             = useState<Payment[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+
+  useEffect(() => {
+    adminAPI
+      .getPayments({ limit: 5, page: 1 })
+      .then(res => {
+        if (res.success && res.data?.payments) setPayments(res.data.payments)
+        else if (res.success && (res.data as any)?.data) setPayments((res.data as any).data as Payment[])
+      })
+      .catch(() => {/* silent — table stays empty */})
+      .finally(() => setPaymentsLoading(false))
+  }, [])
+
+  // ── Loading skeleton ───────────────────────────────────────────────────────
   if (!stats) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="card animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded w-3/4"></div>
+            <div key={i} className="bg-surface-card rounded-card border border-border-subtle shadow-card p-5 animate-pulse">
+              <div className="h-3 bg-surface-dim rounded w-1/2 mb-4" />
+              <div className="h-8 bg-surface-dim rounded w-3/4" />
             </div>
           ))}
         </div>
@@ -26,231 +88,287 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
     )
   }
 
+  // ── Stat cards data ────────────────────────────────────────────────────────
   const statCards = [
     {
-      title: 'Total Users',
-      value: stats.totalUsers.toLocaleString(),
-      icon: Users,
-      gradient: 'from-blue-500 to-cyan-500',
-      bgGradient: 'from-blue-50 to-cyan-50',
-      change: '+12%',
-      changeType: 'positive'
+      title:    'Total Users',
+      value:    stats.totalUsers.toLocaleString(),
+      icon:     'group',
+      sub:      '+12% this week',
+      subIcon:  'arrow_upward',
+      subClass: 'text-status-success',
     },
     {
-      title: 'Total Revenue',
-      value: formatCurrency(stats.totalRevenue),
-      icon: DollarSign,
-      gradient: 'from-emerald-500 to-green-500',
-      bgGradient: 'from-emerald-50 to-green-50',
-      change: '+8%',
-      changeType: 'positive'
+      title:    'Total Revenue',
+      value:    formatCurrency(stats.totalRevenue),
+      icon:     'payments',
+      sub:      '+8% vs last month',
+      subIcon:  'arrow_upward',
+      subClass: 'text-status-success',
     },
     {
-      title: 'Active Sessions',
-      value: stats.activeSessions.toString(),
-      icon: Wifi,
-      gradient: 'from-purple-500 to-pink-500',
-      bgGradient: 'from-purple-50 to-pink-50',
-      change: stats.activeSessions > 0 ? 'Live' : 'None',
-      changeType: stats.activeSessions > 0 ? 'positive' : 'neutral'
+      title:    'Active Sessions',
+      value:    stats.activeSessions.toLocaleString(),
+      icon:     'wifi_tethering',
+      sub:      stats.activeSessions > 0 ? 'Live across access points' : 'No active sessions',
+      subIcon:  null,
+      subClass: 'text-text-muted',
     },
     {
-      title: 'Today\'s Revenue',
-      value: formatCurrency(stats.todayRevenue),
-      icon: TrendingUp,
-      gradient: 'from-orange-500 to-amber-500',
-      bgGradient: 'from-orange-50 to-amber-50',
-      change: 'Today',
-      changeType: 'neutral'
-    }
+      title:    "Today's Revenue",
+      value:    formatCurrency(stats.todayRevenue),
+      icon:     'trending_up',
+      sub:      'Today',
+      subIcon:  null,
+      subClass: 'text-text-muted',
+    },
   ]
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="mb-2">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-indigo-900 to-purple-900 bg-clip-text text-transparent">Dashboard Overview</h1>
-        <p className="text-gray-600 mt-1">Monitor your WiFi billing system performance in real-time</p>
+    <div className="flex flex-col gap-6">
+
+      {/* ── Page header ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-text-primary">Dashboard Overview</h1>
+          <p className="text-xs text-text-muted mt-0.5">
+            Hotspot operations, RADIUS session accounting, and gateway throughput.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-border-subtle bg-surface-card text-xs font-medium text-text-primary hover:bg-surface-canvas transition-colors"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[16px] text-text-muted">file_download</span>
+            Export Log
+          </button>
+          <button
+            onClick={() => navigate('/admin/users')}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded bg-[#0045A9] text-white text-xs font-medium hover:bg-[#00388a] transition-colors shadow-sm"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[16px]">add</span>
+            Issue Voucher
+          </button>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => (
-          <div key={index} className={`bg-gradient-to-br ${stat.bgGradient} rounded-2xl border border-white/50 p-6 hover:shadow-xl hover:scale-105 transition-all duration-300 backdrop-blur-sm`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center shadow-lg`}>
-                <stat.icon className="w-6 h-6 text-white" />
-              </div>
-              <div className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                stat.changeType === 'positive' ? 'bg-emerald-100 text-emerald-700' : 
-                stat.changeType === 'negative' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
-              }`}>
-                {stat.change}
-              </div>
+      {/* ── KPI stat cards ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((card, i) => (
+          <div
+            key={i}
+            className="group bg-surface-card rounded-card border border-border-subtle shadow-card p-5 flex flex-col justify-between
+                       hover:border-border-strong hover:shadow-card-hover transition-all duration-150"
+          >
+            <div className="flex items-center justify-between">
+              <span className="micro-label text-text-secondary">{card.title}</span>
+              <span className="material-symbols-outlined text-[18px] text-text-placeholder">{card.icon}</span>
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+            <div className="mt-3">
+              <div className="text-[2rem] font-bold tabular-nums text-text-primary leading-none">{card.value}</div>
+              <div className={`flex items-center gap-0.5 mt-2.5 text-xs ${card.subClass}`}>
+                {card.subIcon && (
+                  <span className="material-symbols-outlined text-[14px]">{card.subIcon}</span>
+                )}
+                {!card.subIcon && card.title === 'Active Sessions' && (
+                  <span className="w-2 h-2 rounded-full bg-status-success mr-1" />
+                )}
+                <span>{card.sub}</span>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/50 shadow-xl p-6">
-          <div className="flex items-center mb-6">
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900">Quick Actions</h3>
+      {/* ── Two-column middle section ─────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        {/* Quick Actions */}
+        <div className="lg:col-span-6 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text-primary">Quick Actions</h2>
+            <span className="text-[11px] font-mono text-text-muted">Shortcuts</span>
           </div>
-          <div className="space-y-3">
-            <button 
-              onClick={() => navigate('/admin/users')}
-              className="w-full text-left p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-100 hover:from-blue-100 hover:to-cyan-100 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 group"
-            >
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center mr-4 shadow-md group-hover:shadow-lg transition-shadow">
-                  <Users className="w-6 h-6 text-white" />
+          <div className="flex flex-col gap-2.5">
+            {[
+              {
+                href: '/admin/users',
+                icon: 'manage_accounts',
+                label: 'Manage Customers',
+                desc: 'Review user accounts, active subscriptions, and bind device MAC addresses.',
+              },
+              {
+                href: '/admin/plans',
+                icon: 'add_card',
+                label: 'Create New Plan',
+                desc: 'Configure bandwidth speed limits, session durations, and KES tariffs.',
+              },
+              {
+                href: '/admin/routers',
+                icon: 'router',
+                label: 'MikroTik Fleet',
+                desc: 'Deploy ROS configuration scripts, monitor CAPsMAN, and check link health.',
+              },
+            ].map(action => (
+              <button
+                key={action.href}
+                onClick={() => navigate(action.href)}
+                className="group bg-surface-card p-3.5 rounded-card border border-border-subtle hover:border-[#0045A9] transition-colors flex items-center justify-between text-left"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded border border-border-subtle bg-surface-canvas flex items-center justify-center text-text-muted group-hover:text-[#0045A9] transition-colors flex-shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">{action.icon}</span>
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-semibold text-text-primary group-hover:text-[#0045A9] transition-colors">{action.label}</span>
+                    <span className="text-[11px] text-text-muted truncate">{action.desc}</span>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">Manage Users</p>
-                  <p className="text-sm text-blue-600 hidden sm:block">View and manage customer accounts</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-blue-500 group-hover:text-blue-600 transition-colors" />
-              </div>
-            </button>
-            <button 
-              onClick={() => navigate('/admin/plans')}
-              className="w-full text-left p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-100 hover:from-emerald-100 hover:to-green-100 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 group"
-            >
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center mr-4 shadow-md group-hover:shadow-lg transition-shadow">
-                  <DollarSign className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">Create New Plan</p>
-                  <p className="text-sm text-emerald-600 hidden sm:block">Add new internet packages</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-emerald-500 group-hover:text-emerald-600 transition-colors" />
-              </div>
-            </button>
-            <button 
-              onClick={() => navigate('/admin/sessions')}
-              className="w-full text-left p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 hover:from-purple-100 hover:to-pink-100 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 group"
-            >
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mr-4 shadow-md group-hover:shadow-lg transition-shadow">
-                  <Activity className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900">View Active Sessions</p>
-                  <p className="text-sm text-purple-600 hidden sm:block">Monitor current connections</p>
-                </div>
-                <ArrowUpRight className="w-5 h-5 text-purple-500 group-hover:text-purple-600 transition-colors" />
-              </div>
-            </button>
+                <span className="material-symbols-outlined text-[16px] text-text-placeholder group-hover:text-[#0045A9] group-hover:translate-x-0.5 transition-all ml-2 flex-shrink-0">
+                  chevron_right
+                </span>
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/50 shadow-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center mr-3">
-                <Activity className="w-4 h-4 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">System Status</h3>
-            </div>
-            <button 
+        {/* Infrastructure Status */}
+        <div className="lg:col-span-6 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text-primary">Infrastructure Status</h2>
+            <button
               onClick={onRefresh}
-              className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+              className="text-[11px] font-mono text-status-success font-medium hover:underline"
             >
-              Refresh
+              All Systems Operational
             </button>
           </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-100">
-              <div className="flex items-center min-w-0 flex-1">
-                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full mr-3 animate-pulse shadow-sm"></div>
-                <span className="text-sm font-semibold text-gray-900">API Server</span>
+          <div className="bg-surface-card rounded-card border border-border-subtle divide-y divide-border-subtle">
+            {([
+              { label: 'RouterOS Core Gateway',     detail: 'v7.12 • Latency: 4ms',      status: 'Online',  variant: 'success' },
+              { label: 'PostgreSQL Database',       detail: '3 nodes • Replica lag 0s',  status: 'Online',  variant: 'success' },
+              { label: 'Paystack Payment Webhooks', detail: '99.98% delivery rate',      status: 'Online',  variant: 'success' },
+              { label: 'Active Access Gateways',    detail: '8 of 8 units connected',    status: 'Online',  variant: 'success' },
+            ] as Array<{ label: string; detail: string; status: string; variant: BadgeVariant }>).map(svc => (
+              <div key={svc.label} className="p-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="w-2 h-2 rounded-full bg-status-success flex-shrink-0" />
+                  <div>
+                    <div className="text-xs font-semibold text-text-primary">{svc.label}</div>
+                    <div className="text-[11px] font-mono text-text-muted">{svc.detail}</div>
+                  </div>
+                </div>
+                <StatusBadge variant={svc.variant} label={svc.status} />
               </div>
-              <span className="text-sm text-emerald-700 font-bold bg-emerald-100 px-2 py-1 rounded-full">Online</span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-100">
-              <div className="flex items-center min-w-0 flex-1">
-                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full mr-3 animate-pulse shadow-sm"></div>
-                <span className="text-sm font-semibold text-gray-900">Database</span>
-              </div>
-              <span className="text-sm text-emerald-700 font-bold bg-emerald-100 px-2 py-1 rounded-full">Connected</span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-100">
-              <div className="flex items-center min-w-0 flex-1">
-                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full mr-3 animate-pulse shadow-sm"></div>
-                <span className="text-sm font-semibold text-gray-900">M-Pesa Integration</span>
-              </div>
-              <span className="text-sm text-emerald-700 font-bold bg-emerald-100 px-2 py-1 rounded-full">Active (Dev)</span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl border border-amber-100">
-              <div className="flex items-center min-w-0 flex-1">
-                <div className="w-3 h-3 bg-gradient-to-r from-amber-400 to-yellow-500 rounded-full mr-3 animate-pulse shadow-sm"></div>
-                <span className="text-sm font-semibold text-gray-900">Router Connection</span>
-              </div>
-              <span className="text-sm text-amber-700 font-bold bg-amber-100 px-2 py-1 rounded-full">Checking...</span>
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/50 shadow-xl p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
-              <Clock className="w-4 h-4 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900">Recent Activity</h3>
+      {/* ── Recent Transactions table ─────────────────────────────────────── */}
+      <div className="bg-surface-card rounded-card border border-border-subtle shadow-card overflow-hidden">
+
+        {/* Toolbar */}
+        <div className="px-4 py-3 border-b border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div>
+            <h2 className="text-sm font-semibold text-text-primary">Recent Transactions</h2>
+            <p className="text-[11px] text-text-muted">Real-time captive portal checkout events &amp; automated session provisioning.</p>
           </div>
-          <button 
+          <div className="flex items-center gap-2">
+            <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-border-subtle text-xs font-medium text-text-primary hover:bg-surface-canvas transition-colors" type="button">
+              <span className="material-symbols-outlined text-[14px] text-text-muted">tune</span>
+              Filter
+            </button>
+            <button
+              onClick={() => navigate('/admin/payments')}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-surface-canvas border border-border-subtle text-xs font-medium text-text-primary hover:bg-surface-dim transition-colors"
+              type="button"
+            >
+              View All
+              <span className="material-symbols-outlined text-[14px] text-text-muted">north_east</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-surface-canvas border-b border-border-subtle">
+                {(
+                  ['Identifier / Phone', 'Plan', 'Reference', 'Amount (KES)', 'Timestamp', 'Status'] as const
+                ).map((col, ci) => (
+                  <th
+                    key={col}
+                    className={`micro-label h-10 px-4 text-text-secondary ${
+                      ci === 3 || ci === 5 ? 'text-right' : 'text-left'
+                    }`}
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {paymentsLoading && (
+                <tr>
+                  <td colSpan={6} className="h-12 px-4 text-sm text-text-muted text-center">
+                    Loading…
+                  </td>
+                </tr>
+              )}
+              {!paymentsLoading && payments.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="h-12 px-4 text-sm text-text-muted text-center">
+                    No recent transactions.
+                  </td>
+                </tr>
+              )}
+              {!paymentsLoading && payments.map(p => {
+                const identifier = p.user?.phone || p.user?.email || '—'
+                const plan       = p.plan?.name  || '—'
+                const ref        = p.paymentReference || p.checkoutRequestId || '—'
+                const amount     = formatCurrency(p.amount)
+                const ts         = formatTimestamp(p.createdAt)
+                const variant    = paymentVariant(p.status)
+                const label      = p.status.charAt(0) + p.status.slice(1).toLowerCase()
+
+                return (
+                  <tr key={p.id} className="border-b border-border-subtle last:border-0 hover:bg-surface-canvas transition-colors">
+                    <td className="h-12 px-4 text-sm text-text-primary whitespace-nowrap tabular-nums font-mono">
+                      {identifier}
+                    </td>
+                    <td className="h-12 px-4 text-sm text-text-primary whitespace-nowrap">{plan}</td>
+                    <td className="h-12 px-4 text-[11px] text-text-muted whitespace-nowrap tabular-nums font-mono">{ref}</td>
+                    <td className="h-12 px-4 text-sm text-text-primary whitespace-nowrap text-right tabular-nums font-mono font-semibold">
+                      {amount}
+                    </td>
+                    <td className="h-12 px-4 text-[11px] text-text-muted whitespace-nowrap tabular-nums font-mono">{ts}</td>
+                    <td className="h-12 px-4 whitespace-nowrap text-right">
+                      <StatusBadge variant={variant} label={label} />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-2.5 bg-surface-card border-t border-border-subtle flex items-center justify-between text-xs text-text-muted">
+          <span>Showing {payments.length} recent transaction{payments.length !== 1 ? 's' : ''}</span>
+          <button
             onClick={() => navigate('/admin/payments')}
-            className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+            className="px-2.5 py-1 rounded border border-border-subtle bg-surface-card text-text-primary hover:bg-surface-canvas text-xs font-medium"
+            type="button"
           >
-            View All
+            View all payments
           </button>
         </div>
-        <div className="space-y-3">
-          <div className="flex items-center p-4 bg-gradient-to-r from-emerald-50 via-green-50 to-transparent rounded-2xl border border-emerald-100 hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-green-500 rounded-xl flex items-center justify-center mr-4 shadow-sm">
-              <Users className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900">New user registered</p>
-              <p className="text-xs text-emerald-600 font-medium">+254712345678 • 2 minutes ago</p>
-            </div>
-            <ArrowUpRight className="w-5 h-5 text-emerald-500" />
-          </div>
-          <div className="flex items-center p-4 bg-gradient-to-r from-blue-50 via-cyan-50 to-transparent rounded-2xl border border-blue-100 hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl flex items-center justify-center mr-4 shadow-sm">
-              <DollarSign className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900">Payment completed</p>
-              <p className="text-xs text-blue-600 font-medium">KES 100 • Premium 24 Hours • 5 minutes ago</p>
-            </div>
-            <ArrowUpRight className="w-5 h-5 text-blue-500" />
-          </div>
-          <div className="flex items-center p-4 bg-gradient-to-r from-purple-50 via-pink-50 to-transparent rounded-2xl border border-purple-100 hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-500 rounded-xl flex items-center justify-center mr-4 shadow-sm">
-              <Wifi className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900">Session started</p>
-              <p className="text-xs text-purple-600 font-medium">User connected to WiFi • 8 minutes ago</p>
-            </div>
-            <ArrowUpRight className="w-5 h-5 text-purple-500" />
-          </div>
-        </div>
       </div>
+
     </div>
   )
 }

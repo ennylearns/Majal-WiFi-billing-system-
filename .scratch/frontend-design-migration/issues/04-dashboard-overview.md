@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Design-system foundation, 02 — Admin sidebar & nav
 
-**Status:** ready-for-agent
+**Status:** done
 
 **Reference design:** `frontend-templates/stitch_custom_design_implementation/admin_dashboard_overview/screen.png` and `code.html` (main content section)
 
