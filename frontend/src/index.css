@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Material Symbols Outlined — served from local npm assets */
+@import '@material-symbols/font-400/outlined.css';
+
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
@@ -9,6 +12,7 @@
   
   body {
     @apply bg-gray-50 text-gray-900;
+    overscroll-behavior: none;
   }
 }
 
@@ -39,6 +43,18 @@
   
   .status-pending {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800;
+  }
+
+  /* ── Design-system global utilities ───────────────────────────────────── */
+  .tabular-nums {
+    font-feature-settings: "tnum" 1, "cv05" 1;
+  }
+
+  .micro-label {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+    font-weight: 600;
   }
 }
 
