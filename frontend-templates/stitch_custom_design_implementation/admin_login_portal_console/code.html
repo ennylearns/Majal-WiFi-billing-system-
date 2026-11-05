@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="web_blank" name="shell-type"/>
+<title>Sign in to ISP Console | Majal ISP</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+    @layer base {
+      html, body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        overscroll-behavior: none;
+      }
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "canvas": "#F8FAFC",
+            "card-surface": "#FFFFFF",
+            "border-clean": "#E2E8F0",
+            "border-input": "#CBD5E1",
+            "text-main": "#0F172A",
+            "text-muted": "#64748B",
+            "text-subtle": "#94A3B8",
+            "primary": "#175CD3",
+            "primary-hover": "#1550BA",
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+          },
+          boxShadow: {
+            subtle: "0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)",
+          }
+        },
+      },
+    };
+  </script>
+</head>
+<body class="bg-canvas text-text-main font-sans antialiased min-h-screen flex flex-col items-center justify-center p-4 sm:p-6">
+<main class="w-full max-w-[400px]">
+<!-- Header Branding -->
+<div class="flex flex-col items-center text-center mb-8">
+<div class="flex items-center gap-2.5 mb-5">
+<div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white shadow-sm">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">router</span>
+</div>
+<div class="flex items-baseline tracking-tight">
+<span class="text-[20px] font-semibold text-text-main">Majal</span>
+<span class="text-[20px] font-bold text-primary ml-0.5">ISP</span>
+</div>
+</div>
+<h1 class="text-[24px] font-semibold text-text-main tracking-tight leading-tight">
+        Sign in to ISP Console
+      </h1>
+<p class="text-[13px] text-text-muted mt-1.5 leading-normal">
+        Manage subscriber sessions, bandwidth, and billing
+      </p>
+</div>
+<!-- Center Login Card -->
+<div class="bg-card-surface rounded-xl p-6 sm:p-7 shadow-subtle border border-border-clean">
+<form class="space-y-4" id="admin-login-form" onsubmit="event.preventDefault(); handleAuth();">
+<!-- Work Email Address -->
+<div>
+<label class="block text-[13px] font-medium text-text-main mb-1.5" for="admin-email">
+            Work Email Address
+          </label>
+<div class="relative">
+<input autocomplete="email" class="w-full h-10 px-3 rounded-lg border border-border-input bg-card-surface text-[14px] text-text-main placeholder:text-text-subtle focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" id="admin-email" name="email" placeholder="admin@majalisp.com" required="" type="email"/>
+</div>
+</div>
+<!-- Password -->
+<div>
+<label class="block text-[13px] font-medium text-text-main mb-1.5" for="admin-password">
+            Password
+          </label>
+<div class="relative flex items-center">
+<input autocomplete="current-password" class="w-full h-10 pl-3 pr-10 rounded-lg border border-border-input bg-card-surface text-[14px] text-text-main placeholder:text-text-subtle focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors tracking-wide" id="admin-password" name="password" placeholder="••••••••••••" required="" type="password"/>
+<button aria-label="Toggle password visibility" class="absolute right-2.5 p-1 text-text-subtle hover:text-text-muted focus:outline-none transition-colors" id="toggle-pwd-btn" onclick="togglePasswordVisibility()" type="button">
+<span class="material-symbols-outlined text-[20px] select-none block leading-none" id="pwd-icon">visibility</span>
+</button>
+</div>
+</div>
+<!-- Remember & Forgot Password -->
+<div class="flex items-center justify-between pt-0.5">
+<label class="flex items-center gap-2 cursor-pointer select-none">
+<input class="w-4 h-4 rounded border-border-input text-primary focus:ring-primary focus:ring-offset-0 transition" id="remember-device" type="checkbox"/>
+<span class="text-[13px] text-text-muted">Remember this device</span>
+</label>
+<a class="text-[13px] font-medium text-primary hover:text-primary-hover transition-colors" href="javascript:void(0)" onclick="alert('Please contact your Network Operations Lead for credential resets.')">
+            Forgot password?
+          </a>
+</div>
+<!-- Primary Action Button -->
+<div class="pt-2">
+<button class="w-full h-10 bg-primary hover:bg-primary-hover text-white font-medium text-[14px] rounded-lg transition-colors flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 active:scale-[0.99]" id="login-submit-btn" type="submit">
+<span id="btn-label">Sign in to Console</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</form>
+<!-- Quiet Security Footnote -->
+<div class="mt-6 pt-5 border-t border-border-clean flex items-center gap-2 text-text-muted">
+<span class="material-symbols-outlined text-[17px] text-primary shrink-0" style="font-variation-settings: 'FILL' 1;">security</span>
+<p class="text-[12px] leading-relaxed text-text-muted">
+          Encrypted operator access. Sessions are logged and audited.
+        </p>
+</div>
+</div>
+<!-- Back Link -->
+<div class="text-center mt-6">
+<a class="inline-flex items-center gap-1 text-[13px] text-text-muted hover:text-text-main transition-colors group" href="#" onclick="event.preventDefault(); history.back();">
+<span class="transition-transform group-hover:-translate-x-0.5">←</span>
+<span>Back to customer portal</span>
+</a>
+</div>
+</main>
+<script>
+    function togglePasswordVisibility() {
+      const passwordInput = document.getElementById('admin-password');
+      const eyeIcon = document.getElementById('pwd-icon');
+      if (!passwordInput || !eyeIcon) return;
+
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        eyeIcon.textContent = 'visibility_off';
+      } else {
+        passwordInput.type = 'password';
+        eyeIcon.textContent = 'visibility';
+      }
+    }
+
+    function handleAuth() {
+      const btn = document.getElementById('login-submit-btn');
+      const label = document.getElementById('btn-label');
+      if (!btn || !label) return;
+
+      btn.disabled = true;
+      btn.classList.add('opacity-75', 'cursor-not-allowed');
+      label.textContent = 'Authenticating...';
+
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+        label.textContent = 'Sign in to Console';
+        alert('Authentication successful. Redirecting to ISP console.');
+      }, 1000);
+    }
+  </script>
+</body></html>

@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="web_dashboard" name="shell-type"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+    @layer base {
+      html, body { margin: 0; padding: 0; }
+      body { overscroll-behavior: none; }
+      main > :first-child { margin-top: 0 !important; }
+      main > :last-child { margin-bottom: 0 !important; }
+    }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface-canvas": "#F8FAFC",
+            "surface-card": "#FFFFFF",
+            "border-subtle": "#E2E8F0",
+            "border-strong": "#CBD5E1",
+            "text-primary": "#0F172A",
+            "text-secondary": "#475569",
+            "text-muted": "#64748B",
+            "text-placeholder": "#94A3B8",
+            "primary": "#175CD3",
+            "primary-hover": "#154fb7",
+            "primary-light": "#EFF6FF",
+            "status-success": "#16A34A",
+            "status-success-bg": "#F0FDF4",
+            "status-danger": "#DC2626",
+            "status-danger-bg": "#FEF2F2",
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+          },
+          borderRadius: {
+            'card': '12px',
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-surface-canvas text-text-primary font-sans antialiased min-h-screen flex">
+<!-- Sidebar Navigation -->
+<aside class="fixed left-0 top-0 h-full w-[240px] bg-surface-card border-r border-border-subtle z-50 flex flex-col justify-between">
+<div class="flex flex-col">
+<div class="h-14 px-4 border-b border-border-subtle flex items-center justify-between gap-2">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-sm">M</div>
+<span class="font-bold text-[15px] tracking-tight text-text-primary truncate">Majal ISP</span>
+</div>
+<span class="px-2 py-0.5 rounded text-[11px] font-mono font-medium uppercase tracking-wide bg-slate-100 text-text-secondary">Admin</span>
+</div>
+<div class="p-3 border-b border-border-subtle">
+<div class="flex items-center gap-3 p-2 rounded-lg bg-surface-canvas border border-border-subtle">
+<div class="relative flex-shrink-0">
+<img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKK5x9dvolI3LIO9klBbridKRdH9sLF48M_i_pIHD__PjfCPahGsV5VAQ8ac9LoVPfGHP3_85PKd9-B4Cyg_fvGFbO8kvNIjC7LQGSSOK229yT5LNvXOgkzZnrXduvtcdXGG19OvY9wFHLa_iIKW_AYpDjcDY6sFlK-mo6Rt3_HjP5ZHoLfdsqktSNBKZoeakrzmuxZOE7dXFZ3teE-c38ZoSpzhbA5wDG_v6PL1d8"/>
+<span class="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-status-success ring-2 ring-white"></span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="text-xs font-semibold text-text-primary truncate">Root Admin</span>
+<span class="font-mono text-[11px] text-text-muted truncate">NOC-Operator</span>
+</div>
+</div>
+</div>
+<nav class="flex flex-col gap-0.5 p-2">
+<a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-text-secondary hover:bg-slate-50 hover:text-text-primary transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[19px]">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-text-secondary hover:bg-slate-50 hover:text-text-primary transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[19px]">group</span>
+<span>Users</span>
+</a>
+<a aria-current="page" class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-primary-light text-primary font-semibold text-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-[19px]">sell</span>
+<span>Plans</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-text-secondary hover:bg-slate-50 hover:text-text-primary transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[19px]">wifi_tethering</span>
+<span>Sessions</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-text-secondary hover:bg-slate-50 hover:text-text-primary transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[19px]">payments</span>
+<span>Payments</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-text-secondary hover:bg-slate-50 hover:text-text-primary transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[19px]">router</span>
+<span>Routers</span>
+</a>
+<a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-text-secondary hover:bg-slate-50 hover:text-text-primary transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[19px]">tune</span>
+<span>Settings</span>
+</a>
+</nav>
+</div>
+<div class="p-3 border-t border-border-subtle">
+<a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-status-danger hover:bg-status-danger-bg transition-colors text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-[19px]">logout</span>
+<span>Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Layout -->
+<div class="pl-[240px] flex-1 flex flex-col min-h-screen">
+<!-- Top Header -->
+<header class="sticky top-0 h-14 bg-surface-card border-b border-border-subtle z-40 px-8 flex items-center justify-between">
+<div class="flex items-center gap-3 flex-1 max-w-md">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-placeholder text-[18px]">search</span>
+<input class="w-full h-9 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface-canvas text-xs text-text-primary placeholder:text-text-placeholder focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="Search IP, MAC, phone or voucher..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="hidden lg:flex items-center gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-border-subtle font-mono text-xs text-text-secondary">
+<span class="w-2 h-2 rounded-full bg-status-success"></span>
+<span>Today: <strong class="text-text-primary font-semibold">KES 42,850</strong></span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-border-subtle font-mono text-xs text-text-secondary">
+<span class="text-text-muted">Active:</span>
+<strong class="text-text-primary font-semibold">1,284</strong>
+</div>
+</div>
+<div class="h-4 w-[1px] bg-border-subtle hidden lg:block"></div>
+<button class="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-canvas border border-border-subtle transition-colors flex items-center justify-center" title="Refresh metrics" type="button">
+<span class="material-symbols-outlined text-[18px]">sync</span>
+</button>
+<button class="relative p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-canvas border border-border-subtle transition-colors flex items-center justify-center" title="Notifications" type="button">
+<span class="material-symbols-outlined text-[18px]">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-status-danger"></span>
+</button>
+<div class="flex items-center pl-1">
+<img alt="Profile" class="w-7 h-7 rounded-full object-cover border border-border-subtle" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKK5x9dvolI3LIO9klBbridKRdH9sLF48M_i_pIHD__PjfCPahGsV5VAQ8ac9LoVPfGHP3_85PKd9-B4Cyg_fvGFbO8kvNIjC7LQGSSOK229yT5LNvXOgkzZnrXduvtcdXGG19OvY9wFHLa_iIKW_AYpDjcDY6sFlK-mo6Rt3_HjP5ZHoLfdsqktSNBKZoeakrzmuxZOE7dXFZ3teE-c38ZoSpzhbA5wDG_v6PL1d8"/>
+</div>
+</div>
+</header>
+<!-- Main Workspace -->
+<main class="w-full px-8 py-8 flex-1">
+<div class="max-w-7xl mx-auto flex flex-col gap-6">
+<!-- Page Title & Actions -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+<div>
+<h1 class="text-2xl font-bold tracking-tight text-text-primary">Plans Management</h1>
+<p class="text-sm text-text-muted mt-1">Configure captive portal tiers, bandwidth profiles, and subscriber speed caps</p>
+</div>
+<button class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[#175CD3] hover:bg-primary-hover text-white text-sm font-semibold shadow-xs transition-colors self-start sm:self-auto cursor-pointer" id="btn-open-create" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>Create New Plan</span>
+</button>
+</div>
+<!-- 3 Refined Summary Metric Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="bg-surface-card rounded-card border border-border-subtle p-5">
+<div class="text-xs font-medium uppercase tracking-wider text-text-muted">Top Revenue Tier</div>
+<div class="text-xl font-bold text-text-primary mt-2">24 Hours Unlimited</div>
+<div class="text-xs text-text-secondary mt-1 font-mono">KES 150 · 62% of daily sessions</div>
+</div>
+<div class="bg-surface-card rounded-card border border-border-subtle p-5">
+<div class="text-xs font-medium uppercase tracking-wider text-text-muted">Aggregated Bandwidth Allocation</div>
+<div class="text-xl font-bold text-text-primary mt-2">1.25 Gbps</div>
+<div class="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+<span>Core MikroTik CCR2004 Balanced</span>
+</div>
+</div>
+<div class="bg-surface-card rounded-card border border-border-subtle p-5">
+<div class="text-xs font-medium uppercase tracking-wider text-text-muted">Active Captive Sessions</div>
+<div class="text-xl font-bold text-text-primary mt-2">1,284 Users</div>
+<div class="text-xs text-text-secondary mt-1">Nairobi CBD &amp; Westlands Nodes</div>
+</div>
+</div>
+<!-- 3-Column Plan Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+<!-- Plan 1: 1 Hour Quick Pass -->
+<div class="bg-surface-card rounded-card border border-border-subtle p-5 flex flex-col justify-between hover:border-border-strong transition-all">
+<div>
+<div class="flex items-start justify-between gap-2 mb-3">
+<div class="flex items-center gap-2">
+<h3 class="font-bold text-base text-text-primary">1 Hour Quick Pass</h3>
+<span class="inline-flex items-center gap-1 text-[11px] font-medium text-status-success">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+                    Active
+                  </span>
+</div>
+<div class="flex items-center gap-0.5">
+<button class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-slate-100 transition-colors js-edit-trigger" data-duration="1" data-duration-type="Hours" data-price="50" data-quota="Unlimited" data-speed="15" data-title="1 Hour Quick Pass" title="Edit plan" type="button">
+<span class="material-symbols-outlined text-[16px]">edit</span>
+</button>
+<button class="p-1 rounded text-text-muted hover:text-status-danger hover:bg-status-danger-bg transition-colors" title="Delete plan" type="button">
+<span class="material-symbols-outlined text-[16px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mb-4">
+<div class="flex items-baseline gap-1">
+<span class="text-[28px] font-bold text-text-primary tracking-tight">KES 50</span>
+<span class="text-xs text-text-muted font-medium">/ 1 hr</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-1 p-2.5 rounded-lg bg-[#F8FAFC] border border-slate-100 mb-4">
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Speed</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">15 Mbps</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Data Limit</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">Unlimited</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Duration</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">1 Hour</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-text-muted">devices</span>
+<span>Concurrency: <strong class="font-semibold text-text-primary">1 Device</strong></span>
+</div>
+</div>
+<div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-text-muted font-mono">
+<span>TIER-01-1H</span>
+<span class="text-slate-400">Captive Portal</span>
+</div>
+</div>
+<!-- Plan 2: 24 Hours Unlimited (Most Popular) -->
+<div class="bg-surface-card rounded-card border-2 border-primary/40 relative p-5 flex flex-col justify-between hover:border-primary transition-all">
+<div class="absolute -top-2.5 right-4 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary text-white shadow-xs">
+              Most Popular
+            </div>
+<div>
+<div class="flex items-start justify-between gap-2 mb-3">
+<div class="flex items-center gap-2">
+<h3 class="font-bold text-base text-text-primary">24 Hours Unlimited</h3>
+<span class="inline-flex items-center gap-1 text-[11px] font-medium text-status-success">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+                    Active
+                  </span>
+</div>
+<div class="flex items-center gap-0.5">
+<button class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-slate-100 transition-colors js-edit-trigger" data-duration="24" data-duration-type="Hours" data-price="150" data-quota="Unlimited" data-speed="25" data-title="24 Hours Unlimited" title="Edit plan" type="button">
+<span class="material-symbols-outlined text-[16px]">edit</span>
+</button>
+<button class="p-1 rounded text-text-muted hover:text-status-danger hover:bg-status-danger-bg transition-colors" title="Delete plan" type="button">
+<span class="material-symbols-outlined text-[16px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mb-4">
+<div class="flex items-baseline gap-1">
+<span class="text-[28px] font-bold text-text-primary tracking-tight">KES 150</span>
+<span class="text-xs text-text-muted font-medium">/ 24 hrs</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-1 p-2.5 rounded-lg bg-[#F8FAFC] border border-slate-100 mb-4">
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Speed</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">25 Mbps</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Data Limit</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">Unlimited</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Duration</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">24 Hours</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-text-muted">devices</span>
+<span>Concurrency: <strong class="font-semibold text-text-primary">2 Devices</strong></span>
+</div>
+</div>
+<div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-text-muted font-mono">
+<span>TIER-02-24H</span>
+<span class="text-slate-400">Captive Portal</span>
+</div>
+</div>
+<!-- Plan 3: 7 Days Heavy -->
+<div class="bg-surface-card rounded-card border border-border-subtle p-5 flex flex-col justify-between hover:border-border-strong transition-all">
+<div>
+<div class="flex items-start justify-between gap-2 mb-3">
+<div class="flex items-center gap-2">
+<h3 class="font-bold text-base text-text-primary">7 Days Heavy</h3>
+<span class="inline-flex items-center gap-1 text-[11px] font-medium text-status-success">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+                    Active
+                  </span>
+</div>
+<div class="flex items-center gap-0.5">
+<button class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-slate-100 transition-colors js-edit-trigger" data-duration="7" data-duration-type="Days" data-price="750" data-quota="50" data-speed="35" data-title="7 Days Heavy" title="Edit plan" type="button">
+<span class="material-symbols-outlined text-[16px]">edit</span>
+</button>
+<button class="p-1 rounded text-text-muted hover:text-status-danger hover:bg-status-danger-bg transition-colors" title="Delete plan" type="button">
+<span class="material-symbols-outlined text-[16px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mb-4">
+<div class="flex items-baseline gap-1">
+<span class="text-[28px] font-bold text-text-primary tracking-tight">KES 750</span>
+<span class="text-xs text-text-muted font-medium">/ 7 days</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-1 p-2.5 rounded-lg bg-[#F8FAFC] border border-slate-100 mb-4">
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Speed</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">35 Mbps</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Data Limit</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">50 GB FUP</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Duration</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">7 Days</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-text-muted">devices</span>
+<span>Concurrency: <strong class="font-semibold text-text-primary">3 Devices</strong></span>
+</div>
+</div>
+<div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-text-muted font-mono">
+<span>TIER-03-7D</span>
+<span class="text-slate-400">Captive Portal</span>
+</div>
+</div>
+<!-- Plan 4: 30 Days Resident -->
+<div class="bg-surface-card rounded-card border border-border-subtle p-5 flex flex-col justify-between hover:border-border-strong transition-all">
+<div>
+<div class="flex items-start justify-between gap-2 mb-3">
+<div class="flex items-center gap-2">
+<h3 class="font-bold text-base text-text-primary">30 Days Resident</h3>
+<span class="inline-flex items-center gap-1 text-[11px] font-medium text-status-success">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success"></span>
+                    Active
+                  </span>
+</div>
+<div class="flex items-center gap-0.5">
+<button class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-slate-100 transition-colors js-edit-trigger" data-duration="30" data-duration-type="Days" data-price="2400" data-quota="250" data-speed="50" data-title="30 Days Resident" title="Edit plan" type="button">
+<span class="material-symbols-outlined text-[16px]">edit</span>
+</button>
+<button class="p-1 rounded text-text-muted hover:text-status-danger hover:bg-status-danger-bg transition-colors" title="Delete plan" type="button">
+<span class="material-symbols-outlined text-[16px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mb-4">
+<div class="flex items-baseline gap-1">
+<span class="text-[28px] font-bold text-text-primary tracking-tight">KES 2,400</span>
+<span class="text-xs text-text-muted font-medium">/ 30 days</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-1 p-2.5 rounded-lg bg-[#F8FAFC] border border-slate-100 mb-4">
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Speed</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">50 Mbps</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Data Limit</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">250 GB FUP</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Duration</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">30 Days</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-text-muted">devices</span>
+<span>Concurrency: <strong class="font-semibold text-text-primary">4 Devices</strong></span>
+</div>
+</div>
+<div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-text-muted font-mono">
+<span>TIER-04-30D</span>
+<span class="text-slate-400">Captive Portal</span>
+</div>
+</div>
+<!-- Plan 5: Night Owl (10PM - 6AM) [Inactive] -->
+<div class="bg-surface-card rounded-card border border-border-subtle p-5 flex flex-col justify-between opacity-80 hover:opacity-100 transition-all">
+<div>
+<div class="flex items-start justify-between gap-2 mb-3">
+<div class="flex items-center gap-2">
+<h3 class="font-bold text-base text-text-primary">Night Owl (10PM - 6AM)</h3>
+<span class="inline-flex items-center gap-1 text-[11px] font-medium text-text-muted">
+<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                    Inactive
+                  </span>
+</div>
+<div class="flex items-center gap-0.5">
+<button class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-slate-100 transition-colors js-edit-trigger" data-duration="8" data-duration-type="Hours" data-price="80" data-quota="Unlimited" data-speed="40" data-title="Night Owl (10PM - 6AM)" title="Edit plan" type="button">
+<span class="material-symbols-outlined text-[16px]">edit</span>
+</button>
+<button class="p-1 rounded text-text-muted hover:text-status-danger hover:bg-status-danger-bg transition-colors" title="Delete plan" type="button">
+<span class="material-symbols-outlined text-[16px]">delete</span>
+</button>
+</div>
+</div>
+<div class="mb-4">
+<div class="flex items-baseline gap-1">
+<span class="text-[28px] font-bold text-text-primary tracking-tight">KES 80</span>
+<span class="text-xs text-text-muted font-medium">/ 8 hrs</span>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-1 p-2.5 rounded-lg bg-[#F8FAFC] border border-slate-100 mb-4">
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Speed</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">40 Mbps</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Data Limit</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">Unlimited</span>
+</div>
+<div>
+<span class="text-[10px] uppercase font-semibold text-text-muted block">Duration</span>
+<span class="text-xs font-semibold text-text-primary font-mono mt-0.5 block">8 Hours</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-text-muted">devices</span>
+<span>Concurrency: <strong class="font-semibold text-text-primary">1 Device</strong></span>
+</div>
+</div>
+<div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-text-muted font-mono">
+<span>TIER-05-NIGHT</span>
+<span class="text-slate-400">Captive Portal</span>
+</div>
+</div>
+<!-- Empty State Action Card: New Package -->
+<button class="rounded-card border-2 border-dashed border-border-subtle hover:border-primary/50 hover:bg-white bg-slate-50/60 p-6 flex flex-col items-center justify-center text-center transition-all min-h-[260px] cursor-pointer group" id="quick-create-card" type="button">
+<div class="w-10 h-10 rounded-full bg-white border border-border-subtle group-hover:border-primary/30 flex items-center justify-center text-text-muted group-hover:text-primary transition-colors shadow-2xs mb-3">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</div>
+<h4 class="text-sm font-semibold text-text-primary">New Package</h4>
+<p class="text-xs text-text-muted mt-1 max-w-[200px]">Define bandwidth speeds, quotas, and portal billing tiers</p>
+</button>
+</div>
+</div>
+</main>
+<!-- Clean Footer -->
+<footer class="border-t border-border-subtle bg-surface-card px-8 py-4">
+<div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-text-muted">
+<div>
+<span>Majal ISP Network Operations · Central FreeRADIUS &amp; MikroTik Controller</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="inline-flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-status-success"></span>
+            Controller Nominal
+          </span>
+<span>© 2025 Majal Networks</span>
+</div>
+</div>
+</footer>
+</div>
+<!-- Plan Modal -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs hidden" id="plan-modal">
+<div class="bg-surface-card rounded-card w-full max-w-lg shadow-xl border border-border-subtle overflow-hidden">
+<!-- Modal Header -->
+<div class="px-6 py-4 flex items-center justify-between border-b border-border-subtle">
+<h2 class="font-bold text-base text-text-primary" id="modal-title">Create Internet Plan</h2>
+<button class="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-canvas transition-colors" id="btn-close-modal" type="button">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Modal Body -->
+<form class="p-6 space-y-4" id="plan-form">
+<div>
+<label class="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5" for="plan-name-input">Plan Name</label>
+<input class="w-full h-9 px-3 rounded-lg border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" id="plan-name-input" placeholder="e.g. 3 Hours Express Stream" required="" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5" for="plan-price-input">Price (KES)</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-text-placeholder font-mono text-xs">KES</span>
+<input class="w-full h-9 pl-11 pr-3 rounded-lg border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" id="plan-price-input" min="0" placeholder="100" required="" type="number"/>
+</div>
+</div>
+<div>
+<label class="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5" for="plan-speed-input">Speed Limit</label>
+<div class="relative">
+<input class="w-full h-9 px-3 pr-14 rounded-lg border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" id="plan-speed-input" min="1" placeholder="25" required="" type="number"/>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 text-text-placeholder font-mono text-xs">Mbps</span>
+</div>
+</div>
+</div>
+<div>
+<label class="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">Duration</label>
+<div class="flex gap-2">
+<input class="w-1/2 h-9 px-3 rounded-lg border border-border-subtle bg-surface-canvas text-sm text-text-primary focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" id="plan-duration-value" min="1" placeholder="24" required="" type="number"/>
+<select class="w-1/2 h-9 px-2.5 rounded-lg border border-border-subtle bg-surface-canvas text-sm text-text-primary focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer" id="plan-duration-unit">
+<option value="Hours">Hours</option>
+<option value="Days">Days</option>
+<option value="Minutes">Minutes</option>
+</select>
+</div>
+</div>
+<div>
+<div class="flex items-center justify-between mb-1.5">
+<label class="text-xs font-semibold text-text-secondary uppercase tracking-wider">Data Quota Profile</label>
+<label class="inline-flex items-center gap-2 cursor-pointer select-none">
+<input checked="" class="sr-only peer" id="unlimited-toggle" type="checkbox"/>
+<div class="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary relative"></div>
+<span class="text-xs text-text-primary font-medium">Unlimited</span>
+</label>
+</div>
+<div class="relative hidden" id="data-quota-container">
+<input class="w-full h-9 px-3 pr-16 rounded-lg border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" id="plan-quota-input" min="1" placeholder="50" type="number"/>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 text-text-placeholder font-mono text-xs">GB FUP</span>
+</div>
+</div>
+<div class="pt-2 flex items-center justify-end gap-2 border-t border-border-subtle">
+<button class="px-3.5 py-1.5 rounded-lg border border-border-subtle text-text-secondary hover:bg-slate-50 text-sm font-medium transition-colors cursor-pointer" id="btn-cancel-modal" type="button">
+            Cancel
+          </button>
+<button class="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer" type="submit">
+            Save Plan
+          </button>
+</div>
+</form>
+</div>
+</div>
+<script>
+    (function() {
+      const modal = document.getElementById('plan-modal');
+      const openBtn = document.getElementById('btn-open-create');
+      const quickCreateBtn = document.getElementById('quick-create-card');
+      const closeBtn = document.getElementById('btn-close-modal');
+      const cancelBtn = document.getElementById('btn-cancel-modal');
+      const modalTitle = document.getElementById('modal-title');
+      const unlimitedToggle = document.getElementById('unlimited-toggle');
+      const dataQuotaContainer = document.getElementById('data-quota-container');
+      const quotaInput = document.getElementById('plan-quota-input');
+
+      const nameInput = document.getElementById('plan-name-input');
+      const priceInput = document.getElementById('plan-price-input');
+      const durationInput = document.getElementById('plan-duration-value');
+      const durationUnit = document.getElementById('plan-duration-unit');
+      const speedInput = document.getElementById('plan-speed-input');
+
+      function openModal(isEdit = false, data = {}) {
+        if (isEdit) {
+          modalTitle.textContent = 'Edit Internet Plan';
+          nameInput.value = data.title || '';
+          priceInput.value = data.price || '';
+          durationInput.value = data.duration || '';
+          durationUnit.value = data.durationType || 'Hours';
+          speedInput.value = data.speed || '';
+
+          if (data.quota && data.quota !== 'Unlimited') {
+            unlimitedToggle.checked = false;
+            dataQuotaContainer.classList.remove('hidden');
+            quotaInput.value = data.quota;
+          } else {
+            unlimitedToggle.checked = true;
+            dataQuotaContainer.classList.add('hidden');
+            quotaInput.value = '';
+          }
+        } else {
+          modalTitle.textContent = 'Create Internet Plan';
+          document.getElementById('plan-form').reset();
+          unlimitedToggle.checked = true;
+          dataQuotaContainer.classList.add('hidden');
+        }
+        modal.classList.remove('hidden');
+      }
+
+      function closeModal() {
+        modal.classList.add('hidden');
+      }
+
+      if (openBtn) openBtn.addEventListener('click', () => openModal(false));
+      if (quickCreateBtn) quickCreateBtn.addEventListener('click', () => openModal(false));
+      if (closeBtn) closeBtn.addEventListener('click', closeModal);
+      if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      if (unlimitedToggle) {
+        unlimitedToggle.addEventListener('change', () => {
+          if (unlimitedToggle.checked) {
+            dataQuotaContainer.classList.add('hidden');
+            quotaInput.required = false;
+          } else {
+            dataQuotaContainer.classList.remove('hidden');
+            quotaInput.required = true;
+          }
+        });
+      }
+
+      document.querySelectorAll('.js-edit-trigger').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ds = btn.dataset;
+          openModal(true, {
+            title: ds.title,
+            price: ds.price,
+            duration: ds.duration,
+            durationType: ds.durationType,
+            speed: ds.speed,
+            quota: ds.quota
+          });
+        });
+      });
+
+      const form = document.getElementById('plan-form');
+      if (form) {
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          closeModal();
+        });
+      }
+    })();
+  </script>
+</body></html>
