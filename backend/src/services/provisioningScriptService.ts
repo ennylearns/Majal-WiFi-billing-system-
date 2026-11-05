@@ -26,7 +26,7 @@ export interface ProvisioningScriptOptions {
  * 4. API service restricted strictly to server tunnel IP
  * 5. Dedicated `billing-api` user and group
  * 6. Walled garden entries for portal domain and Paystack
- * 7. Hotspot login.html redirecting to portal domain with routerId and router identity
+ * 7. Hotspot login.html redirecting to portal domain with routerId, router identity, mac, and ip
  */
 export function generateProvisioningScript(
   router: ProvisioningRouterInfo,
@@ -71,7 +71,7 @@ export function generateProvisioningScript(
   const wgTunnelIp = router.wgTunnelIp || '10.250.0.2';
   const cleanTunnelIp = wgTunnelIp.split('/')[0];
 
-  const htmlContent = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://${portalDomain}/?routerId=${router.id}&router=$(identity)"><script>window.location.href='https://${portalDomain}/?routerId=${router.id}&router=$(identity)';</script></head><body>Redirecting to portal...</body></html>`;
+  const htmlContent = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://${portalDomain}/?routerId=${router.id}&router=$(identity)&mac=$(mac)&ip=$(ip)"><script>window.location.href='https://${portalDomain}/?routerId=${router.id}&router=$(identity)&mac=$(mac)&ip=$(ip)';</script></head><body>Redirecting to portal...</body></html>`;
 
   return `# --------------------------------------------------
 # Majal WiFi Billing System - RouterOS v7 Provisioning Script

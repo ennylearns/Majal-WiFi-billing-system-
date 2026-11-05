@@ -5,9 +5,9 @@ When a client connects to the WiFi hotspot and is intercepted by the MikroTik ca
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] RouterOS provisioning script generates a `login.html` template that includes `mac=$(mac)` and `ip=$(ip)` query parameters in both meta-refresh and JavaScript redirect URLs.
-- [ ] Provisioning script unit tests verify that generated redirect URLs include router identity, router ID, MAC parameter, and IP parameter.
-- [ ] Existing walled-garden rules and login redirect logic continue functioning without regression.
+- [x] RouterOS provisioning script generates a `login.html` template that includes `mac=$(mac)` and `ip=$(ip)` query parameters in both meta-refresh and JavaScript redirect URLs.
+- [x] Provisioning script unit tests verify that generated redirect URLs include router identity, router ID, MAC parameter, and IP parameter.
+- [x] Existing walled-garden rules and login redirect logic continue functioning without regression.
 

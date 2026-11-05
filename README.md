@@ -249,7 +249,7 @@ The system manages multiple MikroTik routers dynamically through the Admin UI. E
    - Dedicated `billing-api` user and permissions
    - API service enabled and locked strictly to `10.250.0.1/32`
    - Hotspot Walled Garden for the portal domain and Paystack checkout
-   - Captive portal `login.html` redirect passing `routerId` and identity parameters
+   - Captive portal `login.html` redirect passing `routerId`, router identity, MAC, and IP parameters
 4. **Per-Router Session Isolation**: User hotspot accounts are created and cleared exclusively on the router assigned to their purchased plan.
 
 ### Adding a New Router

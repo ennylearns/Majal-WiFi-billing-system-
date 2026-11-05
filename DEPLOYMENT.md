@@ -270,7 +270,7 @@ Physical routers deployed on subscriber premises or LTE/5G SIMs often sit behind
    - API service enabled and locked strictly to `10.250.0.1/32`
    - Dedicated `billing-api` user group and user credentials
    - Hotspot walled garden entries for the portal domain and Paystack checkout
-   - Captive portal `hotspot/login.html` redirect passing `?routerId=<ID>&router=$(identity)`
+   - Captive portal `hotspot/login.html` redirect passing `?routerId=<ID>&router=$(identity)&mac=$(mac)&ip=$(ip)`
 3. Click **Copy Script**.
 
 ---

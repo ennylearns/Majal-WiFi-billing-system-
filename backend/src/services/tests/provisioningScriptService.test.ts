@@ -63,13 +63,21 @@ describe('ProvisioningScriptService - generateProvisioningScript', () => {
     assert.ok(script.includes('/ip/hotspot/walled-garden add dst-host="*paystack.co*" action=allow'));
   });
 
-  test('configures Hotspot login.html redirect to portal domain with routerId and router identity', () => {
+  test('configures Hotspot login.html redirect to portal domain with routerId, router identity, mac, and ip parameters', () => {
     const script = generateProvisioningScript(baseRouter, {
       portalDomain: 'wifi.majal.net'
     });
     assert.ok(script.includes('/ip/hotspot/profile set [find default=yes] html-directory=hotspot'));
     assert.ok(script.includes('hotspot/login.html'));
-    assert.ok(script.includes('https://wifi.majal.net/?routerId=router-uuid-1234&router=$(identity)'));
+    const expectedUrl = 'https://wifi.majal.net/?routerId=router-uuid-1234&router=$(identity)&mac=$(mac)&ip=$(ip)';
+    assert.ok(
+      script.includes(`<meta http-equiv="refresh" content="0; url=${expectedUrl}">`),
+      'meta refresh redirect should include routerId, router identity, mac, and ip'
+    );
+    assert.ok(
+      script.includes(`window.location.href='${expectedUrl}';`),
+      'javascript redirect should include routerId, router identity, mac, and ip'
+    );
   });
 
   test('ensures all resource creation blocks are idempotent', () => {
