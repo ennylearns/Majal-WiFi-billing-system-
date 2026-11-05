@@ -42,6 +42,7 @@ model Router {
   updatedAt   DateTime @updatedAt
 
   plans       Plan[]
+  sessions    Session[]
 
   @@map("routers")
 }
@@ -69,8 +70,8 @@ model Plan {
 
 model Session {
   id              String        @id @default(uuid())
-  userId          String
-  planId          String
+  userId          String?
+  planId          String?
   routerId        String?
   macAddress      String?
   ipAddress       String?
@@ -80,9 +81,11 @@ model Session {
   dataUsed        BigInt        @default(0)
   sessionToken    String        @unique
   routerSessionId String?
+  isTrial         Boolean       @default(false)
   
-  user User @relation(fields: [userId], references: [id])
-  plan Plan @relation(fields: [planId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
+  plan   Plan?   @relation(fields: [planId], references: [id])
+  router Router? @relation(fields: [routerId], references: [id])
   
   @@map("sessions")
 }

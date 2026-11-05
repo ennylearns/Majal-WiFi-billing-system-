@@ -15,7 +15,10 @@ import type {
   PublicRouter,
   CreateRouterData,
   TestConnectionResponse,
-  ProvisionScriptResponse
+  ProvisionScriptResponse,
+  TrialStatus,
+  StartTrialRequest,
+  StartTrialResponse
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -85,6 +88,13 @@ export const publicAPI = {
   // Connection
   connect: (data: ConnectionRequest): Promise<ApiResponse<{ message: string; session: any }>> =>
     publicApi.post('/public/connect', data).then(res => res.data),
+
+  // Trial
+  getTrialStatus: (macAddress: string): Promise<ApiResponse<TrialStatus>> =>
+    publicApi.get('/public/trial/status', { params: { macAddress } }).then(res => res.data),
+
+  startTrial: (data: StartTrialRequest): Promise<ApiResponse<StartTrialResponse>> =>
+    publicApi.post('/public/trial/start', data).then(res => res.data),
 }
 
 // Private API (Admin Dashboard)

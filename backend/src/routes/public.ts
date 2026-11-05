@@ -3,7 +3,7 @@ import { prisma } from '../database/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import sessionService from '../services/sessionService';
+import sessionService, { isValidMac, normalizeMac, TrialCooldownError } from '../services/sessionService';
 import smsService from '../services/smsService';
 import paymentsRouter from './payments';
 
@@ -228,7 +228,7 @@ router.post('/connect', [
         message: 'Connected successfully',
         session: {
           id: session.id,
-          plan: session.plan.name,
+          plan: session.plan?.name || (session.isTrial ? '10-Minute Free Trial' : 'Active Plan'),
           endTime: session.endTime
         }
       }
@@ -236,6 +236,86 @@ router.post('/connect', [
   } catch (error) {
     console.error('Connection error:', error);
     res.status(500).json({ success: false, error: 'Connection failed' });
+  }
+});
+
+// Check trial eligibility and cooldown status
+router.get('/trial/status', async (req: Request, res: Response) => {
+  try {
+    const rawMac = (req.query.macAddress || req.query.mac) as string | undefined;
+
+    if (!rawMac || !isValidMac(rawMac)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid macAddress parameter is required',
+      });
+    }
+
+    const status = await sessionService.getTrialStatus(rawMac);
+    return res.json({ success: true, data: status });
+  } catch (error: any) {
+    console.error('Trial status error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to check trial status' });
+  }
+});
+
+// Start free 10-minute trial
+router.post('/trial/start', [
+  body('routerId').notEmpty().withMessage('routerId is required'),
+  body('macAddress').notEmpty().withMessage('macAddress is required'),
+], async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { routerId, macAddress, ipAddress } = req.body;
+
+    if (!isValidMac(macAddress)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid macAddress is required',
+      });
+    }
+
+    const result = await sessionService.startTrialSession({
+      routerId,
+      macAddress,
+      ipAddress,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        message: result.message,
+        session: {
+          id: result.session.id,
+          sessionToken: result.session.sessionToken,
+          startTime: result.session.startTime,
+          endTime: result.session.endTime,
+          durationMinutes: 10,
+        },
+      },
+    });
+  } catch (error: any) {
+    if (error instanceof TrialCooldownError) {
+      return res.status(429).json({
+        success: false,
+        error: error.message,
+        inCooldown: true,
+        remainingHours: error.remainingHours,
+        remainingMinutes: error.remainingMinutes,
+        remainingSeconds: error.remainingSeconds,
+        cooldownEndsAt: error.cooldownEndsAt.toISOString(),
+      });
+    }
+
+    console.error('Start trial error:', error);
+    return res.status(400).json({
+      success: false,
+      error: error.message || 'Failed to start trial session',
+    });
   }
 });
 

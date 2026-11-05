@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { MikrotikService } from './mikrotikService';
 import smsService from './smsService';
@@ -9,6 +10,85 @@ export type MikrotikRouterRecord = {
   username: string;
   password: string;
 };
+
+export function isValidMac(mac: string): boolean {
+  if (!mac || typeof mac !== 'string') return false;
+  const cleaned = mac.trim().replace(/[:.-]/g, '');
+  return cleaned.length === 12 && /^[0-9a-fA-F]{12}$/.test(cleaned);
+}
+
+export function normalizeMac(mac: string): string {
+  if (!isValidMac(mac)) {
+    throw new Error(`Invalid MAC address: ${mac}`);
+  }
+  const cleaned = mac.trim().toLowerCase().replace(/[:.-]/g, '');
+  return cleaned.match(/.{1,2}/g)!.join(':');
+}
+
+export interface CooldownRemaining {
+  remainingMs: number;
+  remainingSeconds: number;
+  remainingHours: number;
+  remainingMinutes: number;
+}
+
+export function calculateCooldownRemaining(remainingMs: number): CooldownRemaining {
+  const safeMs = Math.max(0, remainingMs);
+  return {
+    remainingMs: safeMs,
+    remainingSeconds: Math.ceil(safeMs / 1000),
+    remainingHours: Math.floor(safeMs / (1000 * 60 * 60)),
+    remainingMinutes: Math.floor((safeMs % (1000 * 60 * 60)) / (1000 * 60)),
+  };
+}
+
+export class TrialCooldownError extends Error {
+  public readonly inCooldown = true;
+  public readonly remainingMs: number;
+  public readonly remainingHours: number;
+  public readonly remainingMinutes: number;
+  public readonly remainingSeconds: number;
+  public readonly cooldownEndsAt: Date;
+
+  constructor(cooldownEndsAt: Date) {
+    const remainingMs = cooldownEndsAt.getTime() - Date.now();
+    const { remainingHours, remainingMinutes, remainingSeconds, remainingMs: safeMs } =
+      calculateCooldownRemaining(remainingMs);
+
+    super(
+      `Trial cooldown active. Another free trial will be available in ${remainingHours}h ${remainingMinutes}m.`
+    );
+    this.name = 'TrialCooldownError';
+    this.remainingMs = safeMs;
+    this.remainingHours = remainingHours;
+    this.remainingMinutes = remainingMinutes;
+    this.remainingSeconds = remainingSeconds;
+    this.cooldownEndsAt = cooldownEndsAt;
+  }
+}
+
+export interface StartTrialParams {
+  routerId: string;
+  macAddress: string;
+  ipAddress?: string;
+}
+
+export interface TrialStatusResult {
+  status: 'ACTIVE' | 'COOLDOWN' | 'ELIGIBLE';
+  isEligible: boolean;
+  inCooldown: boolean;
+  remainingSeconds?: number;
+  remainingHours?: number;
+  remainingMinutes?: number;
+  cooldownEndsAt?: string;
+  session?: {
+    id: string;
+    sessionToken: string;
+    startTime: Date;
+    endTime: Date | null;
+    routerId: string | null;
+  };
+}
 
 /** Build a MikrotikService from a Router DB record. */
 function mikrotikServiceForRouter(router: MikrotikRouterRecord): MikrotikService {
@@ -84,6 +164,139 @@ export class SessionService {
       console.error('Error creating session:', error);
       throw error;
     }
+  }
+
+  async getTrialStatus(macAddress: string): Promise<TrialStatusResult> {
+    const normalizedMac = normalizeMac(macAddress);
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const recentTrial = await this.prisma.session.findFirst({
+      where: {
+        macAddress: normalizedMac,
+        isTrial: true,
+        startTime: {
+          gte: twentyFourHoursAgo,
+        },
+      },
+      orderBy: {
+        startTime: 'desc',
+      },
+    });
+
+    if (!recentTrial) {
+      return {
+        status: 'ELIGIBLE',
+        isEligible: true,
+        inCooldown: false,
+      };
+    }
+
+    // If currently active and endTime > now
+    if (recentTrial.status === 'ACTIVE' && recentTrial.endTime && recentTrial.endTime > now) {
+      const remainingSeconds = Math.max(0, Math.floor((recentTrial.endTime.getTime() - now.getTime()) / 1000));
+      const cooldownEndsAt = new Date(recentTrial.startTime.getTime() + 24 * 60 * 60 * 1000);
+      return {
+        status: 'ACTIVE',
+        isEligible: false,
+        inCooldown: false,
+        remainingSeconds,
+        cooldownEndsAt: cooldownEndsAt.toISOString(),
+        session: {
+          id: recentTrial.id,
+          sessionToken: recentTrial.sessionToken,
+          startTime: recentTrial.startTime,
+          endTime: recentTrial.endTime,
+          routerId: recentTrial.routerId,
+        },
+      };
+    }
+
+    // Trial used within past 24 hours but no longer active
+    const cooldownEndsAt = new Date(recentTrial.startTime.getTime() + 24 * 60 * 60 * 1000);
+    if (cooldownEndsAt > now) {
+      const { remainingHours, remainingMinutes, remainingSeconds } = calculateCooldownRemaining(
+        cooldownEndsAt.getTime() - now.getTime()
+      );
+
+      return {
+        status: 'COOLDOWN',
+        isEligible: false,
+        inCooldown: true,
+        remainingHours,
+        remainingMinutes,
+        remainingSeconds,
+        cooldownEndsAt: cooldownEndsAt.toISOString(),
+      };
+    }
+
+    return {
+      status: 'ELIGIBLE',
+      isEligible: true,
+      inCooldown: false,
+    };
+  }
+
+  async startTrialSession(params: StartTrialParams): Promise<{ session: any; message: string }> {
+    const { routerId, macAddress, ipAddress } = params;
+    const normalizedMac = normalizeMac(macAddress);
+
+    // Validate router
+    const router = await this.prisma.router.findUnique({
+      where: { id: routerId },
+    });
+
+    if (!router || !router.isActive) {
+      throw new Error('Router not found or inactive');
+    }
+
+    // Check trial status/cooldown
+    const trialStatus = await this.getTrialStatus(normalizedMac);
+
+    if (trialStatus.status === 'ACTIVE' || trialStatus.status === 'COOLDOWN') {
+      const cooldownEndsAt = trialStatus.cooldownEndsAt
+        ? new Date(trialStatus.cooldownEndsAt)
+        : trialStatus.session
+        ? new Date(trialStatus.session.startTime.getTime() + 24 * 60 * 60 * 1000)
+        : new Date(Date.now() + 24 * 60 * 60 * 1000);
+      throw new TrialCooldownError(cooldownEndsAt);
+    }
+
+    const startTime = new Date();
+    const durationMinutes = 10;
+    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    const sessionToken = `trial_${crypto.randomBytes(4).toString('hex')}`;
+
+    // Provision MikroTik profile & hotspot user
+    const mikrotik = this.mikrotikFactory(router);
+    const profileName = 'trial_10m';
+
+    try {
+      await mikrotik.createUserProfile(profileName, '2M/1M', '10m');
+    } catch (profileError) {
+      console.log('Trial profile might already exist, continuing...');
+    }
+
+    await mikrotik.createHotspotUser(sessionToken, sessionToken, profileName);
+
+    // Create session record in database
+    const session = await this.prisma.session.create({
+      data: {
+        routerId: router.id,
+        macAddress: normalizedMac,
+        ipAddress: ipAddress || null,
+        sessionToken,
+        startTime,
+        endTime,
+        status: 'ACTIVE',
+        isTrial: true,
+      },
+    });
+
+    return {
+      session,
+      message: '10-minute trial activated successfully',
+    };
   }
 
   async terminateSession(sessionId: string): Promise<void> {
@@ -232,18 +445,20 @@ export const sessionCleanup = async (
         await service.terminateSession(session.id);
 
         // Send expiry notification
-        const user = await prismaClient.user.findUnique({
-          where: { id: session.userId },
-        });
+        if (session.userId) {
+          const user = await prismaClient.user.findUnique({
+            where: { id: session.userId },
+          });
 
-        if (user) {
-          try {
-            await smsService.sendSMS(
-              user.phone,
-              'Your internet session has expired. Purchase a new plan to continue browsing. - COLLOSPOT'
-            );
-          } catch (smsError) {
-            console.warn(`Failed to send expiration SMS for session ${session.id}:`, smsError);
+          if (user) {
+            try {
+              await smsService.sendSMS(
+                user.phone,
+                'Your internet session has expired. Purchase a new plan to continue browsing. - COLLOSPOT'
+              );
+            } catch (smsError) {
+              console.warn(`Failed to send expiration SMS for session ${session.id}:`, smsError);
+            }
           }
         }
         cleanedCount++;

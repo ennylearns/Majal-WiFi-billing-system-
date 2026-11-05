@@ -5,14 +5,14 @@ An unauthenticated visitor on the captive portal can click a single button to ac
 
 **Blocked by:** 01: Captive Portal Client MAC & IP Parameter Forwarding
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Database schema and session service support recording trial sessions linked to device MAC address, router, and expiration time.
-- [ ] Public API endpoint `POST /api/public/trial/start` accepts `routerId`, `macAddress`, and optional `ipAddress`.
-- [ ] Backend validates that no trial session for the given `macAddress` was started within the preceding 24 hours; rejects with HTTP 429/400 and hours/minutes remaining if cooldown is active.
-- [ ] Eligible trial requests provision a MikroTik hotspot user assigned to a profile with `rate-limit=2M/1M` and `session-timeout=10m`.
-- [ ] RouterOS automatically logs out the user when the 10-minute session-timeout expires.
-- [ ] Public API endpoint `GET /api/public/trial/status` reports whether a given MAC is actively in a trial, eligible for a new trial, or in 24-hour cooldown.
-- [ ] Customer portal provides a clear "Connect 10 Mins Free" action that initiates the trial using the client's forwarded MAC address.
-- [ ] Automated tests verify successful trial provisioning, RouterOS timeout profile creation, and 24-hour cooldown rejection.
+- [x] Database schema and session service support recording trial sessions linked to device MAC address, router, and expiration time.
+- [x] Public API endpoint `POST /api/public/trial/start` accepts `routerId`, `macAddress`, and optional `ipAddress`.
+- [x] Backend validates that no trial session for the given `macAddress` was started within the preceding 24 hours; rejects with HTTP 429/400 and hours/minutes remaining if cooldown is active.
+- [x] Eligible trial requests provision a MikroTik hotspot user assigned to a profile with `rate-limit=2M/1M` and `session-timeout=10m`.
+- [x] RouterOS automatically logs out the user when the 10-minute session-timeout expires.
+- [x] Public API endpoint `GET /api/public/trial/status` reports whether a given MAC is actively in a trial, eligible for a new trial, or in 24-hour cooldown.
+- [x] Customer portal provides a clear "Connect 10 Mins Free" action that initiates the trial using the client's forwarded MAC address.
+- [x] Automated tests verify successful trial provisioning, RouterOS timeout profile creation, and 24-hour cooldown rejection.
 

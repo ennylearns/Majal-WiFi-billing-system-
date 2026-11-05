@@ -156,3 +156,37 @@ export interface CreateRouterData {
   password?: string
   isActive?: boolean
 }
+
+export interface TrialStatus {
+  status: 'ACTIVE' | 'COOLDOWN' | 'ELIGIBLE'
+  isEligible: boolean
+  inCooldown: boolean
+  remainingSeconds?: number
+  remainingHours?: number
+  remainingMinutes?: number
+  cooldownEndsAt?: string
+  session?: {
+    id: string
+    sessionToken: string
+    startTime: string
+    endTime: string
+    routerId?: string
+  }
+}
+
+export interface StartTrialRequest {
+  routerId: string
+  macAddress: string
+  ipAddress?: string
+}
+
+export interface StartTrialResponse {
+  message: string
+  session: {
+    id: string
+    sessionToken: string
+    startTime: string
+    endTime: string
+    durationMinutes: number
+  }
+}

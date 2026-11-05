@@ -11,6 +11,8 @@ vi.mock('../services/api', () => ({
     makePayment: vi.fn(),
     getPaymentStatus: vi.fn(),
     connect: vi.fn(),
+    getTrialStatus: vi.fn(),
+    startTrial: vi.fn(),
   },
 }))
 
@@ -77,6 +79,80 @@ describe('CustomerPortal Component', () => {
     vi.mocked(publicAPI.getPlans).mockResolvedValue({
       success: true,
       data: mockPlans,
+    })
+    vi.mocked(publicAPI.connect).mockResolvedValue({
+      success: true,
+      data: { message: 'Connected', session: {} },
+    })
+    vi.mocked(publicAPI.getTrialStatus).mockResolvedValue({
+      success: true,
+      data: {
+        status: 'ELIGIBLE',
+        isEligible: true,
+        inCooldown: false,
+      },
+    })
+  })
+
+  it('renders Connect 10 Mins Free button and initiates trial with forwarded MAC address', async () => {
+    vi.mocked(publicAPI.startTrial).mockResolvedValue({
+      success: true,
+      data: {
+        message: '10-minute trial activated successfully',
+        session: {
+          id: 'trial-sess-1',
+          sessionToken: 'tok-trial-1',
+          startTime: new Date().toISOString(),
+          endTime: new Date(Date.now() + 600000).toISOString(),
+          durationMinutes: 10,
+        },
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&mac=00:11:22:33:44:55&ip=192.168.88.50']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Connect 10 Mins Free/i })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Connect 10 Mins Free/i }))
+
+    await waitFor(() => {
+      expect(publicAPI.startTrial).toHaveBeenCalledWith({
+        routerId: 'router-1',
+        macAddress: '00:11:22:33:44:55',
+        ipAddress: '192.168.88.50',
+      })
+      expect(screen.getByText(/Internet Activated/i)).toBeInTheDocument()
+      expect(screen.getAllByText(/10-Minute Free Trial/i).length).toBeGreaterThan(0)
+    })
+  })
+
+  it('displays cooldown badge when device has used a trial within the last 24 hours', async () => {
+    vi.mocked(publicAPI.getTrialStatus).mockResolvedValue({
+      success: true,
+      data: {
+        status: 'COOLDOWN',
+        isEligible: false,
+        inCooldown: true,
+        remainingHours: 18,
+        remainingMinutes: 30,
+        remainingSeconds: 66600,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&mac=00:11:22:33:44:55']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Available in 18h 30m/i).length).toBeGreaterThan(0)
     })
   })
 

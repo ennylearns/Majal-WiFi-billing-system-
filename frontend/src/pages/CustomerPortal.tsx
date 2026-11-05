@@ -3,7 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { formatCurrency, formatDuration } from '../utils/formatters'
 import { publicAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import type { Plan, PublicRouter } from '../types'
+import type { Plan, PublicRouter, TrialStatus } from '../types'
 
 interface ConnectedSessionInfo {
   plan: string
@@ -27,11 +27,40 @@ const CustomerPortal: React.FC = () => {
   const [connectedSession, setConnectedSession] = useState<ConnectedSessionInfo | null>(null)
   const isPaymentConfirmedRef = useRef(false)
 
+  // Trial state & client parameters forwarded by captive portal redirect
+  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null)
+  const [trialLoading, setTrialLoading] = useState(false)
+
+  const clientMac = searchParams.get('mac') || searchParams.get('macAddress')
+  const clientIp = searchParams.get('ip') || searchParams.get('ipAddress')
+
   const rawRouterParam = searchParams.get('routerId') || searchParams.get('router')
 
   useEffect(() => {
     loadPortalData()
   }, [rawRouterParam])
+
+  useEffect(() => {
+    if (clientMac) {
+      publicAPI
+        .getTrialStatus(clientMac)
+        .then((res) => {
+          if (res.success && res.data) {
+            setTrialStatus(res.data)
+            if (res.data.status === 'ACTIVE' && res.data.session) {
+              setConnectionStatus('connected')
+              setConnectedSession({
+                plan: '10-Minute Free Trial',
+                endTime: res.data.session.endTime,
+              })
+            }
+          }
+        })
+        .catch(() => {
+          // Ignore error on background trial status check
+        })
+    }
+  }, [clientMac])
 
   const loadPortalData = async () => {
     try {
@@ -278,6 +307,68 @@ const CustomerPortal: React.FC = () => {
     }
   }
 
+  const handleStartTrial = async () => {
+    if (!selectedRouter) {
+      toast.error('Please select your hotspot location first')
+      return
+    }
+
+    if (!clientMac) {
+      toast.error('Device MAC address not detected from hotspot redirect')
+      return
+    }
+
+    try {
+      setTrialLoading(true)
+      const res = await publicAPI.startTrial({
+        routerId: selectedRouter.id,
+        macAddress: clientMac,
+        ipAddress: clientIp || undefined,
+      })
+
+      if (res.success && res.data) {
+        // Authorize session at hotspot gateway
+        await publicAPI.connect({ sessionToken: res.data.session.sessionToken }).catch(() => {})
+
+        setConnectionStatus('connected')
+        setPaymentStatus('connected')
+        setConnectedSession({
+          plan: '10-Minute Free Trial',
+          endTime: res.data.session.endTime,
+        })
+        setShowPayment(true)
+        toast.success('10-minute free trial activated!')
+        setTrialStatus({
+          status: 'ACTIVE',
+          isEligible: false,
+          inCooldown: false,
+          session: res.data.session,
+        })
+      }
+    } catch (err: any) {
+      const resp = err.response?.data
+      if (resp?.inCooldown) {
+        setTrialStatus({
+          status: 'COOLDOWN',
+          isEligible: false,
+          inCooldown: true,
+          remainingHours: resp.remainingHours,
+          remainingMinutes: resp.remainingMinutes,
+          remainingSeconds: resp.remainingSeconds,
+          cooldownEndsAt: resp.cooldownEndsAt,
+        })
+        toast.error(
+          resp.error ||
+            `Free trial in cooldown. Next trial available in ${resp.remainingHours ?? 0}h ${resp.remainingMinutes ?? 0}m.`
+        )
+      } else {
+        toast.error(resp?.error || err.message || 'Failed to activate trial')
+      }
+    } finally {
+      setTrialLoading(false)
+    }
+  }
+
   const formatExpiry = (dateStr?: string) => {
     if (!dateStr) return 'Active'
     try {
@@ -414,6 +505,58 @@ const CustomerPortal: React.FC = () => {
             Select a pass, authorize payment instantly via M-Pesa or Card with Paystack, and browse without voucher codes.
           </p>
         </section>
+
+        {/* Free 10-Minute Trial Card */}
+        {selectedRouter && (
+          <div className="mb-8 p-5 rounded-card border border-primary/20 bg-primary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[24px]">bolt</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-text-primary">10-Minute Free Trial</h3>
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-badge bg-primary text-white tracking-wide">
+                    Free
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {trialStatus?.inCooldown
+                    ? `Trial cooldown active for this device. Next free trial available in ${trialStatus.remainingHours ?? 0}h ${trialStatus.remainingMinutes ?? 0}m.`
+                    : 'Test out our high-speed connection (2M/1M) for 10 minutes. No payment required.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0 flex items-center">
+              {trialStatus?.inCooldown ? (
+                <div className="text-xs font-semibold text-text-muted bg-surface-dim border border-border-subtle px-3 py-2 rounded-control flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">schedule</span>
+                  <span>Available in {trialStatus.remainingHours ?? 0}h {trialStatus.remainingMinutes ?? 0}m</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStartTrial}
+                  disabled={trialLoading || !selectedRouter}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-control bg-primary hover:bg-primary-hover text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {trialLoading ? (
+                    <>
+                      <div className="loading-spinner"></div>
+                      <span>Activating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[16px]">wifi</span>
+                      <span>Connect 10 Mins Free</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Plans Section */}
         {loadingData ? (
