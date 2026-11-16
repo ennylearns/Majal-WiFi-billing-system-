@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { formatCurrency, formatDuration } from '../utils/formatters'
 import { publicAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import type { Plan, PublicRouter, TrialStatus } from '../types'
+import { useTrialCountdown } from '../hooks/useTrialCountdown'
 
 interface ConnectedSessionInfo {
   plan: string
@@ -30,11 +31,38 @@ const CustomerPortal: React.FC = () => {
   // Trial state & client parameters forwarded by captive portal redirect
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null)
   const [trialLoading, setTrialLoading] = useState(false)
+  const [trialExpiredBanner, setTrialExpiredBanner] = useState(false)
+
+  // Ref to allow the countdown banner CTA to scroll to plans
+  const plansSectionRef = useRef<HTMLDivElement>(null)
 
   const clientMac = searchParams.get('mac') || searchParams.get('macAddress')
   const clientIp = searchParams.get('ip') || searchParams.get('ipAddress')
 
   const rawRouterParam = searchParams.get('routerId') || searchParams.get('router')
+
+  // Called by the countdown when it reaches 00:00
+  const handleTrialExpired = useCallback(() => {
+    setTrialExpiredBanner(true)
+    setConnectionStatus('disconnected')
+    setConnectedSession(null)
+  }, [])
+
+  // Active trial endTime (null when no active trial)
+  const activeTrialEndTime =
+    trialStatus?.status === 'ACTIVE' ? trialStatus.session?.endTime ?? null : null
+
+  const countdown = useTrialCountdown(activeTrialEndTime, handleTrialExpired)
+
+  // If the portal loads with an already-expired session (server says ACTIVE but
+  // the endTime is in the past), immediately show the expired banner.
+  useEffect(() => {
+    if (countdown.isExpired && trialStatus?.status === 'ACTIVE') {
+      setTrialExpiredBanner(true)
+      setConnectionStatus('disconnected')
+      setConnectedSession(null)
+    }
+  }, [countdown.isExpired, trialStatus?.status])
 
   useEffect(() => {
     loadPortalData()
@@ -53,6 +81,13 @@ const CustomerPortal: React.FC = () => {
                 plan: '10-Minute Free Trial',
                 endTime: res.data.session.endTime,
               })
+            } else if (res.data.status === 'COOLDOWN') {
+              // If the trial ended and we're in cooldown, show expired banner
+              // only when the portal is freshly loaded (no live session)
+              const endedWithinCooldown = !res.data.session
+              if (endedWithinCooldown) {
+                setTrialExpiredBanner(true)
+              }
             }
           }
         })
@@ -238,6 +273,7 @@ const CustomerPortal: React.FC = () => {
             setPaymentStatus('completed')
             setLoading(false)
             toast.success('Payment confirmed!')
+            setTrialExpiredBanner(false) // dismiss expired-trial banner on successful purchase
 
             if (sessionToken) {
               await connectToInternet(sessionToken, plan)
@@ -369,6 +405,10 @@ const CustomerPortal: React.FC = () => {
     }
   }
 
+  const scrollToPlans = () => {
+    plansSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const formatExpiry = (dateStr?: string) => {
     if (!dateStr) return 'Active'
     try {
@@ -435,6 +475,96 @@ const CustomerPortal: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* ── Trial Countdown Banner ──────────────────────────────────────────── */}
+      {trialStatus?.status === 'ACTIVE' && !countdown.isExpired && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Trial countdown"
+          className={`sticky top-16 z-30 w-full border-b shadow-sm transition-colors duration-700 ${
+            countdown.isWarning
+              ? 'bg-red-50 border-red-200'
+              : 'bg-amber-50 border-amber-200'
+          }`}
+        >
+          <div className="max-w-5xl mx-auto px-6 py-2.5 flex items-center justify-between gap-4">
+            {/* Left: icon + message */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span
+                className={`material-symbols-outlined text-[20px] shrink-0 ${
+                  countdown.isWarning ? 'text-red-500' : 'text-amber-600'
+                }`}
+              >
+                timer
+              </span>
+              <span
+                className={`text-xs font-medium leading-snug ${
+                  countdown.isWarning ? 'text-red-700' : 'text-amber-800'
+                }`}
+              >
+                {countdown.isWarning
+                  ? 'Trial ending soon — buy a plan to stay connected!'
+                  : 'You\'re on a 10-minute free trial. Buy a plan before time runs out.'}
+              </span>
+            </div>
+
+            {/* Center: countdown timer */}
+            <span
+              className={`font-mono font-bold tabular-nums text-lg shrink-0 ${
+                countdown.isWarning ? 'text-red-600 animate-pulse' : 'text-amber-700'
+              }`}
+              data-testid="trial-countdown"
+            >
+              {countdown.display}
+            </span>
+
+            {/* Right: CTA */}
+            <button
+              type="button"
+              onClick={scrollToPlans}
+              className={`shrink-0 px-3 py-1.5 rounded-control text-xs font-semibold transition-colors shadow-sm ${
+                countdown.isWarning
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-amber-600 hover:bg-amber-700 text-white'
+              }`}
+            >
+              View Plans
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Expired Trial Banner ────────────────────────────────────────────── */}
+      {trialExpiredBanner && trialStatus?.status !== 'ELIGIBLE' && (
+        <div
+          role="alert"
+          className="sticky top-16 z-30 w-full bg-status-danger-bg border-b border-status-danger-border shadow-sm"
+        >
+          <div className="max-w-5xl mx-auto px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <span className="material-symbols-outlined text-[20px] text-status-danger shrink-0">
+                wifi_off
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-status-danger">
+                  Your free trial has ended — internet access paused.
+                </p>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Purchase a plan below to restore your connection instantly.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={scrollToPlans}
+              className="shrink-0 px-4 py-2 rounded-control bg-status-danger hover:opacity-90 text-white text-xs font-semibold transition-opacity shadow-sm"
+            >
+              Buy a Plan
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Collapsible Location Selector Drawer */}
       {isChangingLocation && (
@@ -559,6 +689,7 @@ const CustomerPortal: React.FC = () => {
         )}
 
         {/* Plans Section */}
+        <div ref={plansSectionRef}>
         {loadingData ? (
           <div className="text-center py-16">
             <div className="loading-spinner mx-auto mb-4"></div>
@@ -601,7 +732,7 @@ const CustomerPortal: React.FC = () => {
             </button>
           </div>
         ) : (
-          <section className="mb-14">
+          <section className="mb-14" ref={plansSectionRef}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
               {displayedPlans.map((plan) => {
                 const isSelected = selectedPlan?.id === plan.id
@@ -687,6 +818,7 @@ const CustomerPortal: React.FC = () => {
             </div>
           </section>
         )}
+        </div>
 
         {/* Streamlined 'How It Works' Stepper */}
         <section className="border-t border-border-subtle pt-10 pb-4">

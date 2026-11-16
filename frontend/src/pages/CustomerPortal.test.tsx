@@ -23,6 +23,18 @@ vi.mock('react-hot-toast', () => ({
   },
 }))
 
+// Mock the countdown hook so portal tests are not time-dependent
+const mockCountdown = vi.hoisted(() => ({
+  display: '09:42',
+  remainingSeconds: 582,
+  isExpired: false,
+  isWarning: false,
+}))
+
+vi.mock('../hooks/useTrialCountdown', () => ({
+  useTrialCountdown: vi.fn(() => mockCountdown),
+}))
+
 const mockRouters = [
   {
     id: 'router-1',
@@ -236,5 +248,126 @@ describe('CustomerPortal Component', () => {
     const modal = screen.getByText(/Opening Paystack Checkout/i).closest('.rounded-card')
     expect(modal).toHaveClass('rounded-card')
     expect(modal).toHaveClass('shadow-card')
+  })
+})
+
+describe('CustomerPortal – Trial Countdown Banner', () => {
+  const activeTrialStatus = {
+    status: 'ACTIVE' as const,
+    isEligible: false,
+    inCooldown: false,
+    remainingSeconds: 582,
+    session: {
+      id: 'sess-t',
+      sessionToken: 'tok-t',
+      startTime: new Date().toISOString(),
+      endTime: new Date(Date.now() + 582000).toISOString(),
+      routerId: 'router-1',
+    },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(publicAPI.getRouters).mockResolvedValue({ success: true, data: mockRouters })
+    vi.mocked(publicAPI.getPlans).mockResolvedValue({ success: true, data: mockPlans })
+    vi.mocked(publicAPI.connect).mockResolvedValue({
+      success: true,
+      data: { message: 'Connected', session: {} },
+    })
+    // Reset countdown mock to non-warning state
+    Object.assign(mockCountdown, {
+      display: '09:42',
+      remainingSeconds: 582,
+      isExpired: false,
+      isWarning: false,
+    })
+  })
+
+  it('renders sticky countdown banner when trial is active', async () => {
+    vi.mocked(publicAPI.getTrialStatus).mockResolvedValue({
+      success: true,
+      data: activeTrialStatus,
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&mac=00:11:22:33:44:55']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /trial countdown/i })).toBeInTheDocument()
+      expect(screen.getByTestId('trial-countdown')).toHaveTextContent('09:42')
+    })
+  })
+
+  it('renders warning styles when fewer than 2 minutes remain', async () => {
+    Object.assign(mockCountdown, {
+      display: '01:30',
+      remainingSeconds: 90,
+      isExpired: false,
+      isWarning: true,
+    })
+
+    vi.mocked(publicAPI.getTrialStatus).mockResolvedValue({
+      success: true,
+      data: { ...activeTrialStatus, remainingSeconds: 90 },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&mac=00:11:22:33:44:55']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      const timer = screen.getByTestId('trial-countdown')
+      expect(timer).toHaveTextContent('01:30')
+      // Warning pulse class applied
+      expect(timer).toHaveClass('animate-pulse')
+    })
+  })
+
+  it('renders expired banner when trial status is COOLDOWN (no active session)', async () => {
+    vi.mocked(publicAPI.getTrialStatus).mockResolvedValue({
+      success: true,
+      data: {
+        status: 'COOLDOWN',
+        isEligible: false,
+        inCooldown: true,
+        remainingHours: 23,
+        remainingMinutes: 0,
+        remainingSeconds: 82800,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&mac=00:11:22:33:44:55']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(screen.getByText(/free trial has ended/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /buy a plan/i })).toBeInTheDocument()
+    })
+  })
+
+  it('countdown banner contains a View Plans button', async () => {
+    vi.mocked(publicAPI.getTrialStatus).mockResolvedValue({
+      success: true,
+      data: activeTrialStatus,
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&mac=00:11:22:33:44:55']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /view plans/i })).toBeInTheDocument()
+    })
   })
 })
