@@ -394,4 +394,35 @@ describe('Trial Session Service - Cooldown and Provisioning', () => {
       /Session is not an active trial session/i
     );
   });
+
+  test('upgraded trial session (wasTrial: true, isTrial: false) maintains 24h cooldown', async () => {
+    const now = new Date();
+    const startTime = new Date(now.getTime() - 1 * 60 * 60 * 1000); // upgraded 1 hour ago
+    const mockUpgradedSession = {
+      id: 'sess-upgraded',
+      macAddress: '00:11:22:33:44:55',
+      sessionToken: 'token_upgraded',
+      planId: 'plan-paid',
+      isTrial: false,
+      wasTrial: true,
+      startTime,
+      endTime: new Date(now.getTime() + 5 * 60 * 60 * 1000), // active paid session
+      status: 'ACTIVE',
+    };
+
+    const mockPrisma: any = {
+      session: {
+        findFirst: async () => mockUpgradedSession,
+      },
+    };
+
+    const service = new SessionService(mockPrisma);
+    const status = await service.getTrialStatus('00:11:22:33:44:55');
+
+    // Must be in COOLDOWN, not ELIGIBLE and not ACTIVE trial countdown
+    assert.equal(status.status, 'COOLDOWN');
+    assert.equal(status.isEligible, false);
+    assert.equal(status.inCooldown, true);
+    assert.ok(status.remainingHours !== undefined && status.remainingHours >= 22);
+  });
 });

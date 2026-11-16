@@ -350,7 +350,7 @@ export class PaymentService {
 
     if (!transitioned) {
       // Lost the race or already transitioned concurrently
-      const existingSession = await this.findActiveSession(payment.userId, payment.planId);
+      const existingSession = await this.findActiveSession(payment.userId, payment.planId, payment.macAddress);
 
       return {
         payment: {
@@ -373,8 +373,8 @@ export class PaymentService {
         macAddress: payment.macAddress,
       });
 
-      if (activeTrial && typeof (this.sessionService as any).upgradeTrialSession === 'function') {
-        const upgradedSession = await (this.sessionService as any).upgradeTrialSession(
+      if (activeTrial && typeof this.sessionService.upgradeTrialSession === 'function') {
+        const upgradedSession = await this.sessionService.upgradeTrialSession(
           activeTrial.id,
           payment.planId,
           payment.userId

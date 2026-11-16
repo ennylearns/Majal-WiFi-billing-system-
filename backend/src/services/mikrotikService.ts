@@ -184,6 +184,27 @@ export class MikrotikService {
     }
   }
 
+  async updateActiveUserRateLimit(username: string, rateLimit: string): Promise<void> {
+    try {
+      await this.connect();
+
+      // Check dynamic simple queues created by hotspot for the active user
+      const queues = await this.api.write('/queue/simple/print', [`?name=<hotspot-${username}>`]);
+      if (queues.length > 0) {
+        const queueId = queues[0]['.id'];
+        await this.api.write('/queue/simple/set', [
+          `=.id=${queueId}`,
+          `=max-limit=${rateLimit}`
+        ]);
+        console.log(`✅ Updated active simple queue rate-limit for ${username} to ${rateLimit}`);
+      }
+    } catch (error) {
+      console.warn(`Could not dynamically adjust simple queue for ${username}:`, error);
+    } finally {
+      await this.disconnect();
+    }
+  }
+
   async getUserUsage(username: string): Promise<{ bytesIn: number; bytesOut: number; uptime: string } | null> {
     try {
       await this.connect();

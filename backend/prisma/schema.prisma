@@ -82,6 +82,7 @@ model Session {
   sessionToken    String        @unique
   routerSessionId String?
   isTrial         Boolean       @default(false)
+  wasTrial        Boolean       @default(false)
   
   user   User?   @relation(fields: [userId], references: [id])
   plan   Plan?   @relation(fields: [planId], references: [id])

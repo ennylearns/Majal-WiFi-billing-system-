@@ -174,7 +174,7 @@ export class SessionService {
     const recentTrial = await this.prisma.session.findFirst({
       where: {
         macAddress: normalizedMac,
-        isTrial: true,
+        OR: [{ isTrial: true }, { wasTrial: true }],
         startTime: {
           gte: twentyFourHoursAgo,
         },
@@ -192,8 +192,8 @@ export class SessionService {
       };
     }
 
-    // If currently active and endTime > now
-    if (recentTrial.status === 'ACTIVE' && recentTrial.endTime && recentTrial.endTime > now) {
+    // If currently active unpaid free trial
+    if (recentTrial.isTrial && recentTrial.status === 'ACTIVE' && recentTrial.endTime && recentTrial.endTime > now) {
       const remainingSeconds = Math.max(0, Math.floor((recentTrial.endTime.getTime() - now.getTime()) / 1000));
       const cooldownEndsAt = new Date(recentTrial.startTime.getTime() + 24 * 60 * 60 * 1000);
       return {
@@ -290,6 +290,7 @@ export class SessionService {
         endTime,
         status: 'ACTIVE',
         isTrial: true,
+        wasTrial: true,
       },
     });
 
@@ -353,6 +354,7 @@ export class SessionService {
     }
 
     await mikrotik.updateUserProfile(session.sessionToken, profileName);
+    await mikrotik.updateActiveUserRateLimit(session.sessionToken, speedLimit);
 
     // Update session record in DB
     const updatedSession = await this.prisma.session.update({
@@ -362,6 +364,7 @@ export class SessionService {
         userId: userId || session.userId,
         routerId: (routerRecord as any).id,
         isTrial: false,
+        wasTrial: true,
         startTime: upgradedAt,
         endTime,
         status: 'ACTIVE',

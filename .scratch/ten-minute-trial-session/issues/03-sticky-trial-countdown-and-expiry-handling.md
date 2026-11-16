@@ -5,11 +5,11 @@ While a 10-minute trial is active, the customer portal displays a prominent, sti
 
 **Blocked by:** 02: 10-Minute Trial Activation with 24-Hour MAC Cooldown
 
-**Status:** done
+**Status:** ready-for-agent
 
-- [x] Customer portal renders a persistent sticky header/banner while a trial is active, showing a real-time ticking countdown (`MM:SS`).
-- [x] Sticky banner contains a direct button/scroll action anchoring the user to the plan selection section.
-- [x] Warning styles (e.g. amber/red color shift) highlight the timer when fewer than 2 minutes remain.
-- [x] When the timer reaches 00:00 or when visited after the router disconnects, the portal presents an expired trial notice explaining that internet access has paused and prompts immediate plan purchase.
-- [x] If a device is in cooldown and attempts to click the trial action, the UI displays the remaining hours/minutes until the next trial is allowed.
+- [ ] Customer portal renders a persistent sticky header/banner while a trial is active, showing a real-time ticking countdown (`MM:SS`).
+- [ ] Sticky banner contains a direct button/scroll action anchoring the user to the plan selection section.
+- [ ] Warning styles (e.g. amber/red color shift) highlight the timer when fewer than 2 minutes remain.
+- [ ] When the timer reaches 00:00 or when visited after the router disconnects, the portal presents an expired trial notice explaining that internet access has paused and prompts immediate plan purchase.
+- [ ] If a device is in cooldown and attempts to click the trial action, the UI displays the remaining hours/minutes until the next trial is allowed.
 

@@ -281,12 +281,7 @@ const CustomerPortal: React.FC = () => {
               await connectToInternet(sessionToken, plan)
             } else {
               const defaultExpiry = new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
-              setConnectedSession({
-                plan: plan.name,
-                endTime: defaultExpiry
-              })
-              setPaymentStatus('connected')
-              setConnectionStatus('connected')
+              markPaidSessionConnected(plan.name, defaultExpiry)
             }
             return
           } else if (status === 'failed') {
@@ -320,30 +315,30 @@ const CustomerPortal: React.FC = () => {
     poll()
   }
 
+  const markPaidSessionConnected = (planName: string, endTime: string) => {
+    setConnectionStatus('connected')
+    setPaymentStatus('connected')
+    setTrialStatus(null)
+    setConnectedSession({
+      plan: planName,
+      endTime,
+    })
+  }
+
+  const isTrialSession = (session: ConnectedSessionInfo | null): boolean =>
+    session?.plan === '10-Minute Free Trial'
+
   const connectToInternet = async (sessionToken: string, plan: Plan) => {
+    const defaultExpiry = new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
     try {
       const response = await publicAPI.connect({ sessionToken })
-      setConnectionStatus('connected')
-      setPaymentStatus('connected')
-      setTrialStatus(null)
-
       const sessionPlan = response.data?.session?.plan || plan.name
-      const sessionEndTime = response.data?.session?.endTime || new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
-
-      setConnectedSession({
-        plan: sessionPlan,
-        endTime: sessionEndTime
-      })
+      const sessionEndTime = response.data?.session?.endTime || defaultExpiry
+      markPaidSessionConnected(sessionPlan, sessionEndTime)
       toast.success('Connected to internet successfully!')
     } catch (error) {
       // Session exists even if MikroTik disconnects
-      setConnectionStatus('connected')
-      setPaymentStatus('connected')
-      setTrialStatus(null)
-      setConnectedSession({
-        plan: plan.name,
-        endTime: new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
-      })
+      markPaidSessionConnected(plan.name, defaultExpiry)
     }
   }
 
@@ -641,7 +636,7 @@ const CustomerPortal: React.FC = () => {
         </section>
 
         {/* Active Paid Plan Connection Banner */}
-        {connectionStatus === 'connected' && connectedSession && connectedSession.plan !== '10-Minute Free Trial' && (
+        {connectionStatus === 'connected' && connectedSession && !isTrialSession(connectedSession) && (
           <div
             data-testid="paid-plan-active-banner"
             className="mb-8 p-5 rounded-card border border-status-success-border bg-status-success-bg/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card"
@@ -668,7 +663,7 @@ const CustomerPortal: React.FC = () => {
         )}
 
         {/* Free 10-Minute Trial Card */}
-        {selectedRouter && !(connectionStatus === 'connected' && connectedSession && connectedSession.plan !== '10-Minute Free Trial') && (
+        {selectedRouter && !(connectionStatus === 'connected' && connectedSession && !isTrialSession(connectedSession)) && (
           <div className="mb-8 p-5 rounded-card border border-primary/20 bg-primary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card">
             <div className="flex items-start sm:items-center gap-3.5">
               <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">

@@ -45,6 +45,7 @@ interface FakeSession {
   startTime: Date;
   endTime: Date | null;
   isTrial?: boolean;
+  wasTrial?: boolean;
   macAddress?: string | null;
 }
 
