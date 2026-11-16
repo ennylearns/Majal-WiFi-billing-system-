@@ -369,8 +369,8 @@ describe('PaystackService - dev-mode stub', () => {
   beforeEach(() => {
     process.env = {
       ...originalEnv,
-      NODE_ENV: 'development',
-      PAYSTACK_SECRET_KEY: 'mock_dev_secret'
+      MOCK_SERVICES: 'true',
+      PAYSTACK_SECRET_KEY: ''
     };
     originalFetch = globalThis.fetch;
   });
@@ -380,11 +380,11 @@ describe('PaystackService - dev-mode stub', () => {
     globalThis.fetch = originalFetch;
   });
 
-  test('skips real API calls and returns mock reference and access_code in development mode', async () => {
+  test('skips real API calls and returns mock reference and access_code when MOCK_SERVICES=true', async () => {
     let fetchCalled = false;
     globalThis.fetch = (async () => {
       fetchCalled = true;
-      throw new Error('fetch should not be called in dev mode');
+      throw new Error('fetch should not be called in mock mode');
     }) as any;
 
     const service = new PaystackService();
@@ -397,6 +397,16 @@ describe('PaystackService - dev-mode stub', () => {
 });
 
 describe('PaystackService - SessionService dependency injection', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, PAYSTACK_SECRET_KEY: 'sk_test_mock_secret_key' };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   test('defaults to default sessionService singleton when omitted from constructor', () => {
     const service = new PaystackService();
     assert.equal(service.sessionService, sessionService);
@@ -419,7 +429,47 @@ describe('PaystackService - SessionService dependency injection', () => {
   });
 });
 
+describe('PaystackService - mock service guard', () => {
+  const originalEnv = process.env;
 
+  afterEach(() => {
+    process.env = originalEnv;
+  });
 
+  test('throws a descriptive error when PAYSTACK_SECRET_KEY is unset and MOCK_SERVICES is not true', () => {
+    process.env = { ...originalEnv };
+    delete process.env.PAYSTACK_SECRET_KEY;
+    delete process.env.MOCK_SERVICES;
 
+    assert.throws(
+      () => new PaystackService(),
+      (err: Error) => {
+        assert.ok(err instanceof Error);
+        assert.ok(
+          err.message.includes('PAYSTACK_SECRET_KEY'),
+          `Error message should mention PAYSTACK_SECRET_KEY, got: ${err.message}`
+        );
+        assert.ok(
+          err.message.includes('MOCK_SERVICES'),
+          `Error message should hint at MOCK_SERVICES, got: ${err.message}`
+        );
+        return true;
+      }
+    );
+  });
+
+  test('does not throw when MOCK_SERVICES=true even without PAYSTACK_SECRET_KEY', () => {
+    process.env = { ...originalEnv, MOCK_SERVICES: 'true' };
+    delete process.env.PAYSTACK_SECRET_KEY;
+
+    assert.doesNotThrow(() => new PaystackService());
+  });
+
+  test('does not throw when PAYSTACK_SECRET_KEY is set even without MOCK_SERVICES', () => {
+    process.env = { ...originalEnv, PAYSTACK_SECRET_KEY: 'sk_live_real_key' };
+    delete process.env.MOCK_SERVICES;
+
+    assert.doesNotThrow(() => new PaystackService());
+  });
+});
 

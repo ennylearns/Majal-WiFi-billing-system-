@@ -1,4 +1,4 @@
-import { test, describe, beforeEach } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   WireguardService,
@@ -46,11 +46,17 @@ describe('WireguardService - Keypair Generation', () => {
 
 describe('WireguardService - Subnet and IP Allocation', () => {
   let service: WireguardService;
+  const originalEnv = process.env;
 
   beforeEach(() => {
+    process.env = { ...originalEnv, MOCK_SERVICES: 'true' };
     service = new WireguardService({
       subnet: '10.250.0.0/24'
     });
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
   });
 
   test('reserves .1 for server and identifies server IP correctly', () => {
@@ -100,6 +106,16 @@ describe('WireguardService - Subnet and IP Allocation', () => {
 });
 
 describe('WireguardService - Peer Management and CLI execution', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, MOCK_SERVICES: 'true' };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   test('executes wg set add peer with correct arguments', async () => {
     const executedCommands: string[] = [];
     const service = new WireguardService({
@@ -198,6 +214,16 @@ describe('WireguardService - Peer Management and CLI execution', () => {
 });
 
 describe('WireguardService - Peer Handshake Inspection', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, MOCK_SERVICES: 'true' };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   test('parses wg show latest-handshakes output for connected peer (< 3 minutes)', async () => {
     const kp = generateWireguardKeyPair();
     const recentEpochSeconds = Math.floor((Date.now() - 60 * 1000) / 1000); // 1 minute ago
@@ -306,5 +332,85 @@ describe('WireguardService - Environment Configuration & Singleton', () => {
     assert.equal(typeof wireguardService.addPeer, 'function');
     assert.equal(typeof wireguardService.removePeer, 'function');
     assert.equal(typeof wireguardService.getPeerHandshake, 'function');
+  });
+});
+
+describe('WireguardService - mock service guard', () => {
+  const originalEnv = process.env;
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  test('throws a descriptive error when mockMode:true is set but MOCK_SERVICES is not true', () => {
+    process.env = { ...originalEnv };
+    delete process.env.MOCK_SERVICES;
+
+    assert.throws(
+      () => new WireguardService({ mockMode: true }),
+      (err: Error) => {
+        assert.ok(err instanceof Error);
+        assert.ok(
+          err.message.includes('wg') || err.message.includes('MOCK_SERVICES'),
+          `Error message should mention wg or MOCK_SERVICES, got: ${err.message}`
+        );
+        assert.ok(
+          err.message.includes('MOCK_SERVICES'),
+          `Error message should hint at MOCK_SERVICES, got: ${err.message}`
+        );
+        return true;
+      }
+    );
+  });
+
+  test('throws a descriptive error when wg binary is unavailable and MOCK_SERVICES is not true', async () => {
+    process.env = { ...originalEnv };
+    delete process.env.MOCK_SERVICES;
+
+    const service = new WireguardService({
+      interfaceName: 'wg0',
+      execFn: async () => {
+        const err = new Error('spawn wg ENOENT');
+        (err as any).code = 'ENOENT';
+        throw err;
+      }
+    });
+
+    const kp = generateWireguardKeyPair();
+    await assert.rejects(
+      async () => { await service.addPeer(kp.publicKey, '10.250.0.2'); },
+      (err: Error) => {
+        assert.ok(err instanceof Error);
+        assert.ok(
+          err.message.includes('wg') && err.message.includes('MOCK_SERVICES'),
+          `Error should mention wg binary and MOCK_SERVICES, got: ${err.message}`
+        );
+        return true;
+      }
+    );
+  });
+
+  test('does not throw when MOCK_SERVICES=true even without wg binary', async () => {
+    process.env = { ...originalEnv, MOCK_SERVICES: 'true' };
+
+    const service = new WireguardService({
+      interfaceName: 'wg0',
+      execFn: async () => {
+        const err = new Error('spawn wg ENOENT');
+        (err as any).code = 'ENOENT';
+        throw err;
+      }
+    });
+
+    const kp = generateWireguardKeyPair();
+    await assert.doesNotReject(async () => {
+      await service.addPeer(kp.publicKey, '10.250.0.2');
+    });
+  });
+
+  test('does not throw when mockMode:true and MOCK_SERVICES=true', () => {
+    process.env = { ...originalEnv, MOCK_SERVICES: 'true' };
+
+    assert.doesNotThrow(() => new WireguardService({ mockMode: true }));
   });
 });

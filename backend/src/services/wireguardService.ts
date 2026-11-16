@@ -99,6 +99,15 @@ export class WireguardService {
     this.subnet = config?.subnet || process.env.WIREGUARD_SUBNET || '10.250.0.0/24';
     this.execFn = config?.execFn;
     this.isMockMode = config?.mockMode ?? false;
+
+    // If mockMode is explicitly requested via config but MOCK_SERVICES is not set, guard it.
+    if (this.isMockMode && process.env.MOCK_SERVICES !== 'true') {
+      throw new Error(
+        'WireguardService mock mode requested but MOCK_SERVICES is not set to "true". ' +
+        'Set MOCK_SERVICES=true in your environment for local development, ' +
+        'or ensure the wg binary is installed for production use.'
+      );
+    }
   }
 
   public getInterfaceName(): string {
@@ -221,6 +230,12 @@ export class WireguardService {
         msg.includes('No such file or directory');
 
       if (isMissingCli) {
+        if (process.env.MOCK_SERVICES !== 'true') {
+          throw new Error(
+            'wg binary not found and MOCK_SERVICES is not set to "true". ' +
+            'Install the wg CLI for production use, or set MOCK_SERVICES=true for local development.'
+          );
+        }
         this.isMockMode = true;
         console.warn(`[wireguardService] wg CLI not available; continuing in mock mode: ${msg}`);
         return null;

@@ -25,6 +25,12 @@ export class PaystackService {
     sessionServiceInstance?: SessionService,
     gatewayInstance?: PaymentGateway
   ) {
+    if (!process.env.PAYSTACK_SECRET_KEY && process.env.MOCK_SERVICES !== 'true') {
+      throw new Error(
+        'Missing PAYSTACK_SECRET_KEY. Set PAYSTACK_SECRET_KEY to a real Paystack secret, ' +
+        'or set MOCK_SERVICES=true to enable mock mode for local development.'
+      );
+    }
     this.prisma = prismaClient;
     this.sessionService = sessionServiceInstance || sessionService;
     this.gateway = gatewayInstance || new PaystackGateway();
@@ -44,7 +50,7 @@ export class PaystackService {
     planId: string,
     paymentId: string
   ): Promise<InitiateTransactionResponse> {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.MOCK_SERVICES === 'true') {
       const mockReference = 'mock_ref_' + Date.now();
       const mockAccessCode = 'mock_code_' + Date.now();
 
