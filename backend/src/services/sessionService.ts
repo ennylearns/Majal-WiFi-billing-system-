@@ -299,6 +299,82 @@ export class SessionService {
     };
   }
 
+  async upgradeTrialSession(sessionId: string, planId: string, userId?: string): Promise<any> {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { router: true },
+    });
+
+    if (!session) {
+      throw new Error('Trial session not found');
+    }
+
+    if (!session.isTrial || session.status !== 'ACTIVE') {
+      throw new Error('Session is not an active trial session');
+    }
+
+    const plan = await this.prisma.plan.findUnique({
+      where: { id: planId },
+      include: { router: true },
+    });
+
+    if (!plan) {
+      throw new Error('Plan not found');
+    }
+
+    let routerRecord: MikrotikRouterRecord | null =
+      (plan.router as MikrotikRouterRecord) ||
+      (session.router as MikrotikRouterRecord) ||
+      null;
+
+    if (!routerRecord && (plan.routerId || session.routerId)) {
+      routerRecord = await this.prisma.router.findUnique({
+        where: { id: (plan.routerId || session.routerId) as string },
+      });
+    }
+
+    if (!routerRecord) {
+      throw new Error('No router associated with plan or session');
+    }
+
+    const upgradedAt = new Date();
+    const endTime = new Date(upgradedAt.getTime() + plan.duration * 3600 * 1000);
+
+    // Update MikroTik router user profile to match purchased plan without disconnecting
+    const mikrotik = this.mikrotikFactory(routerRecord);
+    const profileName = `plan_${plan.id}`;
+    const speedLimit = this.parseSpeedLimit(plan.speedLimit);
+    const sessionTimeout = mikrotik.formatSessionTimeout(plan.duration);
+
+    try {
+      await mikrotik.createUserProfile(profileName, speedLimit, sessionTimeout);
+    } catch (profileError) {
+      console.log('Profile might already exist, continuing...');
+    }
+
+    await mikrotik.updateUserProfile(session.sessionToken, profileName);
+
+    // Update session record in DB
+    const updatedSession = await this.prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        planId: plan.id,
+        userId: userId || session.userId,
+        routerId: (routerRecord as any).id,
+        isTrial: false,
+        startTime: upgradedAt,
+        endTime,
+        status: 'ACTIVE',
+      },
+      include: {
+        user: true,
+        plan: true,
+      },
+    });
+
+    return updatedSession;
+  }
+
   async terminateSession(sessionId: string): Promise<void> {
     try {
       const session = await this.prisma.session.findUnique({

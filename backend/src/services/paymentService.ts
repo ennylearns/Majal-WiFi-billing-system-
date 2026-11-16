@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { PaymentGateway, PaystackGateway } from './paymentGateway';
-import sessionServiceInstance, { SessionService } from './sessionService';
+import sessionServiceInstance, { SessionService, isValidMac, normalizeMac } from './sessionService';
 import smsServiceInstance from './smsService';
 import { prisma as defaultPrisma } from '../database/db';
 
@@ -24,6 +24,8 @@ export interface InitiatePaymentParams {
   phone?: string;
   /** Customer email. At least one of phone/email must be provided. */
   email?: string;
+  /** Client MAC address for in-session trial upgrade. */
+  macAddress?: string;
 }
 
 export interface InitiatePaymentResult {
@@ -69,6 +71,7 @@ export interface ListPaymentsResult {
 
 export interface SessionServiceLike {
   createSession(userId: string, planId: string, sessionToken: string): Promise<any>;
+  upgradeTrialSession?(sessionId: string, planId: string, userId?: string): Promise<any>;
 }
 
 export interface SmsServiceLike {
@@ -106,7 +109,7 @@ export class PaymentService {
    * reference onto the payment record before returning the authorization details.
    */
   async initiatePayment(params: InitiatePaymentParams): Promise<InitiatePaymentResult> {
-    const { planId, amount, phone, email } = params;
+    const { planId, amount, phone, email, macAddress } = params;
 
     // 0. Guard: at least one contact field is required.
     if (!phone && !email) {
@@ -131,6 +134,8 @@ export class PaymentService {
       user.email ||
       `${resolvedPhone.replace(/\D/g, '')}@guest.collospot.com`;
 
+    const normalizedMac = macAddress && isValidMac(macAddress) ? normalizeMac(macAddress) : undefined;
+
     // 4. Create the pending payment record.
     const payment = await this.prisma.payment.create({
       data: {
@@ -138,6 +143,7 @@ export class PaymentService {
         planId,
         amount,
         status: 'PENDING',
+        macAddress: normalizedMac || null,
       },
     });
     // 5. Call the gateway to obtain a checkout reference.
@@ -309,7 +315,7 @@ export class PaymentService {
       gatewayReference || payment.paymentReference || payment.checkoutRequestId || referenceOrId;
 
     if (payment.status === 'COMPLETED') {
-      const existingSession = await this.findActiveSession(payment.userId, payment.planId);
+      const existingSession = await this.findActiveSession(payment.userId, payment.planId, payment.macAddress);
 
       return {
         payment,
@@ -358,16 +364,30 @@ export class PaymentService {
     }
 
     // Winner of the transition: provision network session and dispatch receipt SMS
-    let existingSession = await this.findActiveSession(payment.userId, payment.planId);
+    let existingSession = await this.findActiveSession(payment.userId, payment.planId, payment.macAddress);
 
     let sessionToken = existingSession?.sessionToken;
     if (!sessionToken) {
-      sessionToken = this.generateSessionToken();
-      await this.sessionService.createSession(
-        payment.userId,
-        payment.planId,
-        sessionToken
-      );
+      const activeTrial = await this.findActiveTrialSession({
+        userId: payment.userId,
+        macAddress: payment.macAddress,
+      });
+
+      if (activeTrial && typeof (this.sessionService as any).upgradeTrialSession === 'function') {
+        const upgradedSession = await (this.sessionService as any).upgradeTrialSession(
+          activeTrial.id,
+          payment.planId,
+          payment.userId
+        );
+        sessionToken = upgradedSession.sessionToken;
+      } else {
+        sessionToken = this.generateSessionToken();
+        await this.sessionService.createSession(
+          payment.userId,
+          payment.planId,
+          sessionToken
+        );
+      }
     }
 
     const phone = payment.user?.phone;
@@ -407,14 +427,60 @@ export class PaymentService {
     });
   }
 
-  private async findActiveSession(userId: string, planId: string) {
+  private async findActiveSession(userId: string, planId: string, macAddress?: string | null) {
+    const orClauses: any[] = [{ userId, planId, status: 'ACTIVE' }];
+    if (macAddress) {
+      orClauses.push({ macAddress, planId, status: 'ACTIVE' });
+    }
+
     return this.prisma.session.findFirst({
       where: {
-        userId,
-        planId,
-        status: 'ACTIVE',
+        OR: orClauses,
       },
+      orderBy: { startTime: 'desc' },
     });
+  }
+
+  private async findActiveTrialSession(params: { userId?: string; macAddress?: string | null }) {
+    const { userId, macAddress } = params;
+    const now = new Date();
+
+    // Prioritize client MAC address when available
+    if (macAddress) {
+      const trialByMac = await this.prisma.session.findFirst({
+        where: {
+          macAddress,
+          isTrial: true,
+          status: 'ACTIVE',
+          endTime: {
+            gt: now,
+          },
+        },
+        orderBy: {
+          startTime: 'desc',
+        },
+      });
+      if (trialByMac) return trialByMac;
+    }
+
+    // Fall back to authenticated/guest customer ID
+    if (userId) {
+      return this.prisma.session.findFirst({
+        where: {
+          userId,
+          isTrial: true,
+          status: 'ACTIVE',
+          endTime: {
+            gt: now,
+          },
+        },
+        orderBy: {
+          startTime: 'desc',
+        },
+      });
+    }
+
+    return null;
   }
 
   /**

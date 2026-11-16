@@ -99,6 +99,7 @@ export interface PaymentRequest {
   email?: string
   planId: string
   amount: number
+  macAddress?: string
 }
 
 export interface PaymentInitiateData {

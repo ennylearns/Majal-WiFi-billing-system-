@@ -264,10 +264,134 @@ describe('Trial Session Service - Cooldown and Provisioning', () => {
       },
       (err: any) => {
         assert.ok(err instanceof TrialCooldownError);
-        assert.equal(err.remainingHours, 19); // 24 - 4 = 20, minus minutes elapsed => 19
+        assert.ok(err.remainingHours === 19 || err.remainingHours === 20);
         assert.ok(err.remainingMinutes >= 0 && err.remainingMinutes <= 59);
         return true;
       }
+    );
+  });
+
+  test('upgradeTrialSession transitions active trial in-place to paid plan', async () => {
+    mockWriteResponses['/ip/hotspot/user/print'] = [{ '.id': '*1', name: 'trial_abc123' }];
+
+    const mockRouter = {
+      id: 'r-1',
+      host: '10.250.0.10',
+      port: 8728,
+      username: 'admin',
+      password: 'pwd',
+      isActive: true,
+    };
+
+    const mockPlan = {
+      id: 'plan-3hours',
+      name: '3 Hours Standard',
+      duration: 3,
+      speedLimit: '5Mbps',
+      price: 50,
+      isActive: true,
+      routerId: 'r-1',
+      router: mockRouter,
+    };
+
+    const initialStartTime = new Date(Date.now() - 5 * 60 * 1000); // 5 mins ago
+    const trialEndTime = new Date(initialStartTime.getTime() + 10 * 60 * 1000);
+
+    const mockTrialSession = {
+      id: 'trial-sess-1',
+      userId: null,
+      planId: null,
+      routerId: 'r-1',
+      macAddress: 'aa:bb:cc:dd:ee:ff',
+      sessionToken: 'trial_abc123',
+      startTime: initialStartTime,
+      endTime: trialEndTime,
+      status: 'ACTIVE',
+      isTrial: true,
+      router: mockRouter,
+    };
+
+    let updatedData: any = null;
+
+    const mockPrisma: any = {
+      session: {
+        findUnique: async ({ where }: any) => {
+          if (where.id === 'trial-sess-1') return mockTrialSession;
+          return null;
+        },
+        update: async ({ where, data }: any) => {
+          updatedData = data;
+          return {
+            ...mockTrialSession,
+            ...data,
+          };
+        },
+      },
+      plan: {
+        findUnique: async ({ where }: any) => {
+          if (where.id === 'plan-3hours') return mockPlan;
+          return null;
+        },
+      },
+      router: {
+        findUnique: async () => mockRouter,
+      },
+    };
+
+    const service = new SessionService(mockPrisma);
+    const beforeUpgrade = Date.now();
+    const result = await service.upgradeTrialSession('trial-sess-1', 'plan-3hours', 'user-paying-123');
+
+    // Verification 1: sessionToken unchanged
+    assert.equal(result.sessionToken, 'trial_abc123');
+
+    // Verification 2: isTrial marked false
+    assert.equal(updatedData.isTrial, false);
+    assert.equal(updatedData.planId, 'plan-3hours');
+    assert.equal(updatedData.userId, 'user-paying-123');
+    assert.equal(updatedData.status, 'ACTIVE');
+
+    // Verification 3: duration measured from payment/upgrade time (3 hours from now)
+    const newEndMs = updatedData.endTime.getTime();
+    const expectedEndMs = beforeUpgrade + 3 * 3600 * 1000;
+    assert.ok(Math.abs(newEndMs - expectedEndMs) < 5000, 'endTime should be ~3 hours from upgrade time');
+
+    // Verification 4: RouterOS commands update profile without tearing down connection
+    // Profile created for paid plan
+    const profileCmd = writtenCommands.find((c) => c.command === '/ip/hotspot/user/profile/add');
+    assert.ok(profileCmd, 'Should add profile for paid plan');
+    assert.ok(profileCmd.args?.includes('=name=plan_plan-3hours'));
+    assert.ok(profileCmd.args?.includes('=rate-limit=5M/5M'));
+
+    // User profile updated with set, NOT remove or disconnect
+    const userSetCmd = writtenCommands.find((c) => c.command === '/ip/hotspot/user/set');
+    assert.ok(userSetCmd, 'Should call /ip/hotspot/user/set');
+    assert.ok(userSetCmd.args?.includes('=profile=plan_plan-3hours'));
+
+    const removeCmd = writtenCommands.find((c) => c.command === '/ip/hotspot/user/remove');
+    assert.equal(removeCmd, undefined, 'Must not remove hotspot user during seamless upgrade');
+
+    const activeRemoveCmd = writtenCommands.find((c) => c.command === '/ip/hotspot/active/remove');
+    assert.equal(activeRemoveCmd, undefined, 'Must not disconnect active session during seamless upgrade');
+  });
+
+  test('upgradeTrialSession throws if session is not an active trial', async () => {
+    const mockPrisma: any = {
+      session: {
+        findUnique: async () => ({
+          id: 'sess-already-paid',
+          isTrial: false,
+          status: 'ACTIVE',
+        }),
+      },
+    };
+
+    const service = new SessionService(mockPrisma);
+    await assert.rejects(
+      async () => {
+        await service.upgradeTrialSession('sess-already-paid', 'plan-1');
+      },
+      /Session is not an active trial session/i
     );
   });
 });

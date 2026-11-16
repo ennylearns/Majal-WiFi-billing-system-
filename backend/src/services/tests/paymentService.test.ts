@@ -36,14 +36,16 @@ interface FakePlan {
 
 interface FakeSession {
   id: string;
-  userId: string;
-  planId: string;
+  userId: string | null;
+  planId: string | null;
   routerId: string | null;
   sessionToken: string;
   status: string;
   dataUsed: bigint;
   startTime: Date;
   endTime: Date | null;
+  isTrial?: boolean;
+  macAddress?: string | null;
 }
 
 interface FakePayment {
@@ -55,6 +57,7 @@ interface FakePayment {
   checkoutRequestId: string | null;
   paymentReference: string | null;
   paymentMethod: string;
+  macAddress?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -133,6 +136,7 @@ function makeFakePrisma(seed?: {
           checkoutRequestId: args.data.checkoutRequestId ?? null,
           paymentReference: args.data.paymentReference ?? null,
           paymentMethod: args.data.paymentMethod ?? 'PAYSTACK',
+          macAddress: args.data.macAddress ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -299,9 +303,22 @@ function makeFakePrisma(seed?: {
     session: {
       findFirst: async (args: any) => {
         return sessions.find(s => {
+          const orClauses: any[] = args?.where?.OR ?? [];
+          if (orClauses.length > 0) {
+            const matchesOr = orClauses.some(clause => {
+              if (clause.userId !== undefined && s.userId !== clause.userId) return false;
+              if (clause.planId !== undefined && s.planId !== clause.planId) return false;
+              if (clause.macAddress !== undefined && s.macAddress !== clause.macAddress) return false;
+              if (clause.status !== undefined && s.status !== clause.status) return false;
+              return true;
+            });
+            if (!matchesOr) return false;
+          }
+          if (args?.where?.isTrial !== undefined && (s.isTrial ?? false) !== args.where.isTrial) return false;
+          if (args?.where?.status && s.status !== args.where.status) return false;
+          if (args?.where?.endTime?.gt && s.endTime && s.endTime <= args.where.endTime.gt) return false;
           if (args?.where?.userId && s.userId !== args.where.userId) return false;
           if (args?.where?.planId && s.planId !== args.where.planId) return false;
-          if (args?.where?.status && s.status !== args.where.status) return false;
           if (args?.where?.sessionToken && s.sessionToken !== args.where.sessionToken) return false;
           return true;
         }) ?? null;
@@ -1314,6 +1331,203 @@ describe('PaymentService.listPayments — administrative queries & filtering', (
     // Search by email
     const searchEmail = await service.listPayments({ search: 'alice@' });
     assert.equal(searchEmail.payments.length, 2);
+  });
+});
+
+describe('Payment fulfillment - Seamless In-Session Trial Upgrade', () => {
+  let fakePrisma: any;
+  let fakeGateway: FakePaymentGateway;
+  let fakeSessionService: any;
+  let fakeSmsService: any;
+  let paymentService: PaymentService;
+
+  let testUser: any;
+  let paidPlan: any;
+
+  beforeEach(() => {
+    testUser = {
+      id: 'usr-trial-upgrade',
+      phone: '+254711999888',
+      email: 'trialup@test.com',
+      role: 'CUSTOMER',
+      isActive: true,
+      firstName: 'Trial',
+      lastName: 'User',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    paidPlan = {
+      id: 'plan-paid-gold',
+      name: 'Gold Plan 24 Hours',
+      isActive: true,
+      price: 150,
+      duration: 24,
+      dataLimit: 'Unlimited',
+      speedLimit: '10Mbps',
+      routerId: 'r-1',
+    };
+
+    fakeGateway = new FakePaymentGateway();
+    fakeSessionService = {
+      createdSessions: [] as any[],
+      upgradedSessions: [] as any[],
+      createSession: async (userId: string, planId: string, token: string) => {
+        fakeSessionService.createdSessions.push({ userId, planId, token });
+        return { id: 'sess-created', userId, planId, sessionToken: token };
+      },
+      upgradeTrialSession: async (sessionId: string, planId: string, userId?: string) => {
+        fakeSessionService.upgradedSessions.push({ sessionId, planId, userId });
+        const existing = fakePrisma._sessions.find((s: any) => s.id === sessionId);
+        if (existing) {
+          existing.planId = planId;
+          existing.userId = userId || existing.userId;
+          existing.isTrial = false;
+          existing.status = 'ACTIVE';
+        }
+        return existing || { id: sessionId, sessionToken: 'trial_token_active' };
+      },
+    };
+    fakeSmsService = {
+      sendPaymentConfirmation: async () => true,
+    };
+  });
+
+  test('fulfilling payment upgrades active trial session matching client MAC address', async () => {
+    const trialMac = '00:aa:bb:cc:dd:ee';
+    const trialSession = {
+      id: 'sess-active-trial-1',
+      userId: null,
+      planId: null,
+      routerId: 'r-1',
+      sessionToken: 'trial_token_123',
+      macAddress: trialMac,
+      status: 'ACTIVE',
+      isTrial: true,
+      startTime: new Date(Date.now() - 3 * 60 * 1000), // 3 mins ago
+      endTime: new Date(Date.now() + 7 * 60 * 1000), // 7 mins left
+      dataUsed: BigInt(0),
+    };
+
+    fakePrisma = makeFakePrisma({
+      users: [testUser],
+      plans: [paidPlan],
+      sessions: [trialSession],
+    });
+
+    paymentService = new PaymentService(fakePrisma, fakeGateway, fakeSessionService, fakeSmsService);
+
+    const init = await paymentService.initiatePayment({
+      planId: paidPlan.id,
+      amount: paidPlan.price,
+      phone: testUser.phone,
+      macAddress: trialMac,
+    });
+
+    const result = await paymentService.fulfillPayment(init.reference);
+
+    // Verifications:
+    // 1. Session token must be the trial session token (seamless upgrade)
+    assert.equal(result.sessionToken, 'trial_token_123');
+    assert.equal(result.alreadyFulfilled, false);
+
+    // 2. upgradeTrialSession was called with trial session ID
+    assert.equal(fakeSessionService.upgradedSessions.length, 1);
+    assert.equal(fakeSessionService.upgradedSessions[0].sessionId, 'sess-active-trial-1');
+    assert.equal(fakeSessionService.upgradedSessions[0].planId, paidPlan.id);
+
+    // 3. createSession was NOT called (no duplicate sessions)
+    assert.equal(fakeSessionService.createdSessions.length, 0);
+
+    // 4. Trial session in database is updated
+    assert.equal(trialSession.isTrial, false);
+    assert.equal(trialSession.planId, paidPlan.id);
+  });
+
+  test('fulfillment is idempotent: subsequent checks return the upgraded session without duplicate calls', async () => {
+    const trialMac = '00:aa:bb:cc:dd:ee';
+    const trialSession = {
+      id: 'sess-active-trial-idem',
+      userId: testUser.id,
+      planId: null,
+      routerId: 'r-1',
+      sessionToken: 'trial_token_idem',
+      macAddress: trialMac,
+      status: 'ACTIVE',
+      isTrial: true,
+      startTime: new Date(Date.now() - 2 * 60 * 1000),
+      endTime: new Date(Date.now() + 8 * 60 * 1000),
+      dataUsed: BigInt(0),
+    };
+
+    fakePrisma = makeFakePrisma({
+      users: [testUser],
+      plans: [paidPlan],
+      sessions: [trialSession],
+    });
+
+    paymentService = new PaymentService(fakePrisma, fakeGateway, fakeSessionService, fakeSmsService);
+
+    const init = await paymentService.initiatePayment({
+      planId: paidPlan.id,
+      amount: paidPlan.price,
+      phone: testUser.phone,
+      macAddress: trialMac,
+    });
+
+    // First fulfillment
+    const res1 = await paymentService.fulfillPayment(init.reference);
+    assert.equal(res1.sessionToken, 'trial_token_idem');
+    assert.equal(res1.alreadyFulfilled, false);
+
+    // Second fulfillment (e.g. status check or duplicate webhook)
+    const res2 = await paymentService.fulfillPayment(init.reference);
+    assert.equal(res2.sessionToken, 'trial_token_idem');
+    assert.equal(res2.alreadyFulfilled, true);
+
+    // Verify upgradeTrialSession called only once, createSession never called
+    assert.equal(fakeSessionService.upgradedSessions.length, 1);
+    assert.equal(fakeSessionService.createdSessions.length, 0);
+  });
+
+  test('fulfilling payment creates new session when trial session is already expired', async () => {
+    const trialMac = '00:aa:bb:cc:dd:ee';
+    const expiredTrialSession = {
+      id: 'sess-expired-trial',
+      userId: null,
+      planId: null,
+      routerId: 'r-1',
+      sessionToken: 'trial_token_old',
+      macAddress: trialMac,
+      status: 'ACTIVE',
+      isTrial: true,
+      startTime: new Date(Date.now() - 15 * 60 * 1000),
+      endTime: new Date(Date.now() - 5 * 60 * 1000), // expired 5 mins ago
+      dataUsed: BigInt(0),
+    };
+
+    fakePrisma = makeFakePrisma({
+      users: [testUser],
+      plans: [paidPlan],
+      sessions: [expiredTrialSession],
+    });
+
+    paymentService = new PaymentService(fakePrisma, fakeGateway, fakeSessionService, fakeSmsService);
+
+    const init = await paymentService.initiatePayment({
+      planId: paidPlan.id,
+      amount: paidPlan.price,
+      phone: testUser.phone,
+      macAddress: trialMac,
+    });
+
+    const result = await paymentService.fulfillPayment(init.reference);
+
+    // Should create new session since previous trial is expired
+    assert.equal(fakeSessionService.upgradedSessions.length, 0);
+    assert.equal(fakeSessionService.createdSessions.length, 1);
+    assert.ok(result.sessionToken);
+    assert.notEqual(result.sessionToken, 'trial_token_old');
   });
 });
 

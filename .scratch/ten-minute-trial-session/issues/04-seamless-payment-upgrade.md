@@ -5,11 +5,11 @@ When a user currently on an active 10-minute trial purchases a paid plan, the pa
 
 **Blocked by:** 02: 10-Minute Trial Activation with 24-Hour MAC Cooldown
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Payment fulfillment handler detects when a paying user/MAC has an active trial session.
-- [ ] Active trial session is upgraded to the purchased plan duration (measured from payment time) and marked with paid plan status.
-- [ ] Hotspot user credentials and profile on the MikroTik router are updated to match the purchased plan's bandwidth rate limit and session duration without tearing down the existing physical connection.
-- [ ] Portal UI dismisses the trial countdown banner and displays active paid plan connection details.
-- [ ] Automated tests verify that completing a payment during an active trial upgrades the session and router settings seamlessly without creating duplicate or conflicting sessions.
+- [x] Payment fulfillment handler detects when a paying user/MAC has an active trial session.
+- [x] Active trial session is upgraded to the purchased plan duration (measured from payment time) and marked with paid plan status.
+- [x] Hotspot user credentials and profile on the MikroTik router are updated to match the purchased plan's bandwidth rate limit and session duration without tearing down the existing physical connection.
+- [x] Portal UI dismisses the trial countdown banner and displays active paid plan connection details.
+- [x] Automated tests verify that completing a payment during an active trial upgrades the session and router settings seamlessly without creating duplicate or conflicting sessions.
 

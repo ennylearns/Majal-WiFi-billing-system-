@@ -6,6 +6,7 @@ import express from 'express';
 import { RouterOSAPI } from 'node-routeros';
 import { prisma } from '../../database/db';
 import publicRoutes from '../public';
+import paymentService from '../../services/paymentService';
 
 describe('Public Trial Routes - /api/public/trial', () => {
   let server: http.Server;
@@ -31,6 +32,9 @@ describe('Public Trial Routes - /api/public/trial', () => {
     };
     (RouterOSAPI.prototype as any).write = async function (command: string, args?: string[]) {
       writtenCommands.push({ command, args });
+      if (command === '/ip/hotspot/user/print') {
+        return [{ '.id': '*test-user-id', name: args?.[0]?.replace('?name=', '') || 'user' }];
+      }
       return [];
     };
 
@@ -200,6 +204,104 @@ describe('Public Trial Routes - /api/public/trial', () => {
     assert.equal(body2.data?.status, 'ACTIVE');
     assert.equal(body2.data?.isEligible, false);
     assert.ok(body2.data?.remainingSeconds > 0);
+  });
+
+  test('completing a payment during an active trial upgrades the session and router seamlessly without duplicate sessions', async () => {
+    // 1. Ensure a paid plan exists
+    let paidPlan = await prisma.plan.findFirst({
+      where: { routerId: testRouterId, isActive: true },
+    });
+    if (!paidPlan) {
+      paidPlan = await prisma.plan.create({
+        data: {
+          name: '1 Hour Fast Pass',
+          price: 20,
+          duration: 1,
+          dataLimit: 'Unlimited',
+          speedLimit: '10Mbps',
+          isActive: true,
+          routerId: testRouterId,
+        },
+      });
+    }
+
+    const clientMac = `00:99:88:77:66:${Math.floor(10 + Math.random() * 89)}`;
+
+    // 2. Start free trial
+    const trialRes = await fetch(`${baseUrl}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        routerId: testRouterId,
+        macAddress: clientMac,
+      }),
+    });
+    assert.equal(trialRes.status, 201);
+    const trialBody = (await trialRes.json()) as any;
+    const initialSessionToken = trialBody.data.session.sessionToken;
+    const initialSessionId = trialBody.data.session.id;
+
+    // Reset writtenCommands to inspect upgrade commands
+    writtenCommands = [];
+
+    // 3. Initiate payment specifying clientMac
+    const paymentUrl = baseUrl.replace('/trial', '/payment');
+    const payInitRes = await fetch(paymentUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        planId: paidPlan.id,
+        amount: paidPlan.price,
+        macAddress: clientMac,
+        phone: `+254799${Math.floor(100000 + Math.random() * 899999)}`,
+      }),
+    });
+    assert.equal(payInitRes.status, 200);
+    const payInitBody = (await payInitRes.json()) as any;
+    const paymentReference = payInitBody.reference;
+    assert.ok(paymentReference);
+
+    // 4. Complete / Fulfill payment
+    const fulfillResult = await paymentService.fulfillPayment(paymentReference);
+
+    // Assertions:
+    // a) Session token remains identical to trial session (no user re-login needed)
+    assert.equal(fulfillResult.sessionToken, initialSessionToken);
+
+    // b) Session record in database is upgraded in-place
+    const dbSession = await prisma.session.findUnique({
+      where: { id: initialSessionId },
+    });
+    assert.ok(dbSession);
+    assert.equal(dbSession?.isTrial, false);
+    assert.equal(dbSession?.planId, paidPlan.id);
+    assert.equal(dbSession?.status, 'ACTIVE');
+
+    // c) Expiration measured from payment time: ~1 hour from now, not original 10m
+    const remainingMs = dbSession!.endTime!.getTime() - Date.now();
+    assert.ok(remainingMs > 50 * 60 * 1000, 'Expiration should be ~1 hour in the future');
+
+    // d) Verify MikroTik router profile updated without disconnect
+    const userSetCmd = writtenCommands.find((c) => c.command === '/ip/hotspot/user/set');
+    assert.ok(userSetCmd, 'Router hotspot user should be updated');
+    assert.ok(userSetCmd.args?.includes(`=profile=plan_${paidPlan.id}`));
+
+    const removeCmd = writtenCommands.find((c) => c.command === '/ip/hotspot/user/remove');
+    assert.equal(removeCmd, undefined, 'Must not remove hotspot user');
+
+    const activeRemoveCmd = writtenCommands.find((c) => c.command === '/ip/hotspot/active/remove');
+    assert.equal(activeRemoveCmd, undefined, 'Must not disconnect active session');
+
+    // e) Verify no duplicate sessions created for this MAC
+    const allSessionsForMac = await prisma.session.findMany({
+      where: { macAddress: clientMac.toLowerCase() },
+    });
+    assert.equal(allSessionsForMac.length, 1, 'Only one session should exist for MAC after upgrade');
+
+    // f) Idempotent fulfillment check: fulfilling again returns same session
+    const secondFulfill = await paymentService.fulfillPayment(paymentReference);
+    assert.equal(secondFulfill.sessionToken, initialSessionToken);
+    assert.equal(secondFulfill.alreadyFulfilled, true);
   });
 });
 

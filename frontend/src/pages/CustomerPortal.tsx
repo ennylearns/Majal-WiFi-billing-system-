@@ -174,7 +174,8 @@ const CustomerPortal: React.FC = () => {
     try {
       const response = await publicAPI.makePayment({
         planId: plan.id,
-        amount: plan.price
+        amount: plan.price,
+        macAddress: clientMac || undefined,
       })
 
       const reference = response.data?.reference || (response as any).reference
@@ -274,6 +275,7 @@ const CustomerPortal: React.FC = () => {
             setLoading(false)
             toast.success('Payment confirmed!')
             setTrialExpiredBanner(false) // dismiss expired-trial banner on successful purchase
+            setTrialStatus(null) // dismiss trial countdown banner and clear trial state immediately
 
             if (sessionToken) {
               await connectToInternet(sessionToken, plan)
@@ -323,6 +325,7 @@ const CustomerPortal: React.FC = () => {
       const response = await publicAPI.connect({ sessionToken })
       setConnectionStatus('connected')
       setPaymentStatus('connected')
+      setTrialStatus(null)
 
       const sessionPlan = response.data?.session?.plan || plan.name
       const sessionEndTime = response.data?.session?.endTime || new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
@@ -336,6 +339,7 @@ const CustomerPortal: React.FC = () => {
       // Session exists even if MikroTik disconnects
       setConnectionStatus('connected')
       setPaymentStatus('connected')
+      setTrialStatus(null)
       setConnectedSession({
         plan: plan.name,
         endTime: new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
@@ -636,8 +640,35 @@ const CustomerPortal: React.FC = () => {
           </p>
         </section>
 
+        {/* Active Paid Plan Connection Banner */}
+        {connectionStatus === 'connected' && connectedSession && connectedSession.plan !== '10-Minute Free Trial' && (
+          <div
+            data-testid="paid-plan-active-banner"
+            className="mb-8 p-5 rounded-card border border-status-success-border bg-status-success-bg/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card"
+          >
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-10 h-10 rounded-full bg-status-success/10 text-status-success flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[24px]">wifi</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-text-primary">Connected to Internet</h3>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-badge bg-status-success text-white tracking-wide">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                    Active Plan
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Plan: <span className="font-semibold text-text-primary">{connectedSession.plan}</span> • Expires:{' '}
+                  <span className="font-mono tabular-nums text-text-primary">{formatExpiry(connectedSession.endTime)}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Free 10-Minute Trial Card */}
-        {selectedRouter && (
+        {selectedRouter && !(connectionStatus === 'connected' && connectedSession && connectedSession.plan !== '10-Minute Free Trial') && (
           <div className="mb-8 p-5 rounded-card border border-primary/20 bg-primary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-card">
             <div className="flex items-start sm:items-center gap-3.5">
               <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">

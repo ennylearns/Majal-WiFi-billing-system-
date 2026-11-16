@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import paymentService from '../services/paymentService';
+import { isValidMac } from '../services/sessionService';
 
 const router = express.Router();
 
@@ -17,6 +18,10 @@ router.post(
     body('planId').isUUID().withMessage('Valid plan ID required'),
     body('amount').isFloat({ min: 1 }).withMessage('Valid amount required'),
     body('email').optional().isEmail().withMessage('Valid email required'),
+    body('macAddress')
+      .optional()
+      .custom((val) => !val || isValidMac(val))
+      .withMessage('Valid MAC address required'),
   ],
   async (req: Request, res: Response) => {
     try {
@@ -25,10 +30,10 @@ router.post(
         return res.status(400).json({ success: false, errors: errors.array() });
       }
 
-      const { phone: inputPhone, planId, amount, email } = req.body;
+      const { phone: inputPhone, planId, amount, email, macAddress } = req.body;
       const phone = inputPhone || (email ? undefined : `+254700${Math.floor(100000 + Math.random() * 900000)}`);
 
-      const result = await paymentService.initiatePayment({ phone, planId, amount, email });
+      const result = await paymentService.initiatePayment({ phone, planId, amount, email, macAddress });
 
       res.json({
         success: true,
