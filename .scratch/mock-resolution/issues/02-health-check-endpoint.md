@@ -4,16 +4,16 @@
 
 **Blocked by:** 01 (mock service guard must be in place so the health check doesn't accidentally activate mocks)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `GET /api/admin/health` returns `{ postgres: { status, message? }, paystack: { status, message? }, wireguard: { status, message? } }`
-- [ ] PostgreSQL check uses a minimal Prisma query (e.g. `$queryRaw SELECT 1`)
-- [ ] Paystack check is a synchronous env-var presence test, no outbound HTTP call
-- [ ] WireGuard check spawns `wg show` and reports `ok` on exit code 0, `error` otherwise
-- [ ] Endpoint is protected by admin auth middleware
-- [ ] DashboardOverview fetches from the endpoint on mount
-- [ ] Each row in the Infrastructure Status table shows the real service name, real status, and real message from the response
-- [ ] Fake hardcoded rows (`RouterOS Core Gateway`, `PostgreSQL Database`, etc.) and fake metrics (`Latency: 4ms`, etc.) are removed
-- [ ] Test: endpoint returns `postgres.status = ok` when Prisma is reachable (using the in-memory stub pattern)
-- [ ] Test: endpoint returns `postgres.status = error` when Prisma throws
-- [ ] Test: endpoint returns `paystack.status = ok` when env var is set, `error` when unset
+- [x] `GET /api/admin/health` returns `{ postgres: { status, message? }, paystack: { status, message? }, wireguard: { status, message? } }`
+- [x] PostgreSQL check uses a minimal Prisma query (e.g. `$queryRaw SELECT 1`)
+- [x] Paystack check is a synchronous env-var presence test, no outbound HTTP call
+- [x] WireGuard check spawns `wg show` and reports `ok` on exit code 0, `error` otherwise
+- [x] Endpoint is protected by admin auth middleware
+- [x] DashboardOverview fetches from the endpoint on mount
+- [x] Each row in the Infrastructure Status table shows the real service name, real status, and real message from the response
+- [x] Fake hardcoded rows (`RouterOS Core Gateway`, `PostgreSQL Database`, etc.) and fake metrics (`Latency: 4ms`, etc.) are removed
+- [x] Test: endpoint returns `postgres.status = ok` when Prisma is reachable (using the in-memory stub pattern)
+- [x] Test: endpoint returns `postgres.status = error` when Prisma throws
+- [x] Test: endpoint returns `paystack.status = ok` when env var is set, `error` when unset

@@ -18,7 +18,8 @@ import type {
   ProvisionScriptResponse,
   TrialStatus,
   StartTrialRequest,
-  StartTrialResponse
+  StartTrialResponse,
+  HealthCheckResponse
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -171,6 +172,10 @@ export const adminAPI = {
 
   testRouterConnection: (id: string): Promise<TestConnectionResponse> =>
     privateApi.post(`/admin/routers/${id}/test-connection`).then(res => res.data),
+
+  // Infrastructure health check
+  getHealth: (): Promise<HealthCheckResponse> =>
+    privateApi.get('/admin/health').then(res => res.data),
 
   // Legacy single-router status
   getRouterStatus: (): Promise<ApiResponse<{ activeUsers: number; users: any[] }>> =>

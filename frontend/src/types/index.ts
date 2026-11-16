@@ -74,6 +74,17 @@ export interface DashboardStats {
   totalSessions: number
 }
 
+export interface HealthServiceStatus {
+  status: 'ok' | 'error'
+  message?: string
+}
+
+export interface HealthCheckResponse {
+  postgres: HealthServiceStatus
+  paystack: HealthServiceStatus
+  wireguard: HealthServiceStatus
+}
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T

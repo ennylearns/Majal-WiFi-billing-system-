@@ -5,6 +5,7 @@ import { body, validationResult } from 'express-validator';
 import sessionService from '../services/sessionService';
 import routerService from '../services/routerService';
 import paymentService from '../services/paymentService';
+import healthService from '../services/healthService';
 
 
 const router = express.Router();
@@ -12,6 +13,20 @@ const router = express.Router();
 // Apply authentication to all admin routes
 router.use(authenticateToken);
 router.use(requireRole(['ADMIN', 'SUPER_ADMIN']));
+
+// Infrastructure health check
+router.get('/health', async (req: AuthRequest, res: Response) => {
+  try {
+    const health = await healthService.checkHealth();
+    res.json(health);
+  } catch (error: any) {
+    res.status(500).json({
+      postgres: { status: 'error', message: error?.message || 'Database check failed' },
+      paystack: { status: 'error', message: error?.message || 'Paystack check failed' },
+      wireguard: { status: 'error', message: error?.message || 'WireGuard check failed' }
+    });
+  }
+});
 
 // Dashboard stats
 router.get('/dashboard', async (req: AuthRequest, res: Response) => {

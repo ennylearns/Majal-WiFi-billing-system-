@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { formatCurrency } from '../utils/formatters'
 import { useNavigate } from 'react-router-dom'
 import { adminAPI } from '../services/api'
-import type { DashboardStats, Payment } from '../types'
+import type { DashboardStats, Payment, HealthCheckResponse } from '../types'
 
 interface DashboardOverviewProps {
   stats: DashboardStats | null
@@ -60,6 +60,35 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
   // Recent payments — live data
   const [payments, setPayments]             = useState<Payment[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(true)
+
+  // Infrastructure health — live data
+  const [health, setHealth]                 = useState<HealthCheckResponse | null>(null)
+  const [healthLoading, setHealthLoading]   = useState(true)
+
+  const fetchHealth = () => {
+    if (typeof adminAPI.getHealth !== 'function') {
+      setHealthLoading(false)
+      return
+    }
+    setHealthLoading(true)
+    adminAPI
+      .getHealth()
+      .then(res => {
+        setHealth(res)
+      })
+      .catch(() => {
+        setHealth({
+          postgres: { status: 'error', message: 'Failed to fetch status' },
+          paystack: { status: 'error', message: 'Failed to fetch status' },
+          wireguard: { status: 'error', message: 'Failed to fetch status' }
+        })
+      })
+      .finally(() => setHealthLoading(false))
+  }
+
+  useEffect(() => {
+    fetchHealth()
+  }, [])
 
   useEffect(() => {
     adminAPI
@@ -239,30 +268,67 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-text-primary">Infrastructure Status</h2>
             <button
-              onClick={onRefresh}
-              className="text-[11px] font-mono text-status-success font-medium hover:underline"
+              onClick={() => {
+                fetchHealth()
+                onRefresh?.()
+              }}
+              className={`text-[11px] font-mono font-medium hover:underline ${
+                health &&
+                health.postgres.status === 'ok' &&
+                health.paystack.status === 'ok' &&
+                health.wireguard.status === 'ok'
+                  ? 'text-status-success'
+                  : health
+                  ? 'text-status-danger'
+                  : 'text-text-muted'
+              }`}
             >
-              All Systems Operational
+              {healthLoading && !health
+                ? 'Checking Systems…'
+                : health &&
+                  health.postgres.status === 'ok' &&
+                  health.paystack.status === 'ok' &&
+                  health.wireguard.status === 'ok'
+                ? 'All Systems Operational'
+                : 'System Issues Detected'}
             </button>
           </div>
           <div className="bg-surface-card rounded-card border border-border-subtle divide-y divide-border-subtle">
-            {([
-              { label: 'RouterOS Core Gateway',     detail: 'v7.12 • Latency: 4ms',      status: 'Online',  variant: 'success' },
-              { label: 'PostgreSQL Database',       detail: '3 nodes • Replica lag 0s',  status: 'Online',  variant: 'success' },
-              { label: 'Paystack Payment Webhooks', detail: '99.98% delivery rate',      status: 'Online',  variant: 'success' },
-              { label: 'Active Access Gateways',    detail: '8 of 8 units connected',    status: 'Online',  variant: 'success' },
-            ] as Array<{ label: string; detail: string; status: string; variant: BadgeVariant }>).map(svc => (
-              <div key={svc.label} className="p-3.5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="w-2 h-2 rounded-full bg-status-success flex-shrink-0" />
-                  <div>
-                    <div className="text-xs font-semibold text-text-primary">{svc.label}</div>
-                    <div className="text-[11px] font-mono text-text-muted">{svc.detail}</div>
+            {healthLoading && !health ? (
+              <div className="p-4 text-xs text-text-muted text-center">Loading infrastructure status…</div>
+            ) : (
+              ([
+                {
+                  label: 'PostgreSQL Database',
+                  status: health?.postgres.status === 'ok' ? 'Online' : 'Error',
+                  detail: health?.postgres.message || (health?.postgres.status === 'ok' ? 'Connected' : 'Unavailable'),
+                  variant: (health?.postgres.status === 'ok' ? 'success' : 'danger') as BadgeVariant
+                },
+                {
+                  label: 'Paystack',
+                  status: health?.paystack.status === 'ok' ? 'Online' : 'Error',
+                  detail: health?.paystack.message || (health?.paystack.status === 'ok' ? 'Configured' : 'Missing configuration'),
+                  variant: (health?.paystack.status === 'ok' ? 'success' : 'danger') as BadgeVariant
+                },
+                {
+                  label: 'WireGuard',
+                  status: health?.wireguard.status === 'ok' ? 'Online' : 'Error',
+                  detail: health?.wireguard.message || (health?.wireguard.status === 'ok' ? 'Interface active' : 'Unavailable'),
+                  variant: (health?.wireguard.status === 'ok' ? 'success' : 'danger') as BadgeVariant
+                }
+              ] as Array<{ label: string; detail: string; status: string; variant: BadgeVariant }>).map(svc => (
+                <div key={svc.label} className="p-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DOT_CLASSES[svc.variant]}`} />
+                    <div>
+                      <div className="text-xs font-semibold text-text-primary">{svc.label}</div>
+                      <div className="text-[11px] font-mono text-text-muted">{svc.detail}</div>
+                    </div>
                   </div>
+                  <StatusBadge variant={svc.variant} label={svc.status} />
                 </div>
-                <StatusBadge variant={svc.variant} label={svc.status} />
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
