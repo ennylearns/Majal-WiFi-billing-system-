@@ -128,6 +128,182 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Get user session history
+router.get('/users/:id/sessions', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const sessions = await prisma.session.findMany({
+      where: { userId: id },
+      orderBy: { startTime: 'desc' },
+      include: {
+        plan: {
+          select: {
+            id: true,
+            name: true,
+            duration: true,
+            price: true,
+            speedLimit: true,
+            dataLimit: true
+          }
+        },
+        router: {
+          select: {
+            id: true,
+            name: true,
+            location: true
+          }
+        }
+      }
+    });
+
+    const formattedSessions = sessions.map(session => ({
+      ...session,
+      dataUsed: Number(session.dataUsed)
+    }));
+
+    res.json({ success: true, data: formattedSessions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get user sessions' });
+  }
+});
+
+// Terminate active sessions for a user
+router.post('/users/:id/terminate-sessions', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const activeSessions = await prisma.session.findMany({
+      where: { userId: id, status: 'ACTIVE' }
+    });
+
+    for (const session of activeSessions) {
+      try {
+        await sessionService.terminateSession(session.id);
+      } catch (err) {
+        await prisma.session.update({
+          where: { id: session.id },
+          data: { status: 'TERMINATED', endTime: new Date() }
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      terminatedCount: activeSessions.length,
+      message: `${activeSessions.length} active session(s) terminated successfully`
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to terminate user sessions' });
+  }
+});
+
+// Toggle user active/inactive status
+router.post('/users/:id/toggle-active', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { isActive: !user.isActive }
+    });
+
+    res.json({
+      success: true,
+      isActive: updatedUser.isActive,
+      data: updatedUser,
+      message: `User ${updatedUser.isActive ? 'activated' : 'deactivated'} successfully`
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to toggle user status' });
+  }
+});
+
+// Get user MAC bindings
+router.get('/users/:id/mac-bindings', async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const [sessions, payments] = await Promise.all([
+      prisma.session.findMany({
+        where: { userId: id, macAddress: { not: null } },
+        orderBy: { startTime: 'desc' },
+        select: {
+          macAddress: true,
+          startTime: true,
+          ipAddress: true,
+          routerId: true
+        }
+      }),
+      prisma.payment.findMany({
+        where: { userId: id, macAddress: { not: null } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          macAddress: true,
+          createdAt: true
+        }
+      })
+    ]);
+
+    const macMap = new Map<string, { macAddress: string; lastSeen: Date; ipAddress?: string | null; routerId?: string | null }>();
+
+    for (const s of sessions) {
+      if (!s.macAddress) continue;
+      const mac = s.macAddress.toLowerCase();
+      if (!macMap.has(mac)) {
+        macMap.set(mac, {
+          macAddress: mac,
+          lastSeen: s.startTime,
+          ipAddress: s.ipAddress,
+          routerId: s.routerId
+        });
+      } else {
+        const existing = macMap.get(mac)!;
+        if (s.startTime > existing.lastSeen) {
+          existing.lastSeen = s.startTime;
+        }
+      }
+    }
+
+    for (const p of payments) {
+      if (!p.macAddress) continue;
+      const mac = p.macAddress.toLowerCase();
+      if (!macMap.has(mac)) {
+        macMap.set(mac, {
+          macAddress: mac,
+          lastSeen: p.createdAt
+        });
+      } else {
+        const existing = macMap.get(mac)!;
+        if (p.createdAt > existing.lastSeen) {
+          existing.lastSeen = p.createdAt;
+        }
+      }
+    }
+
+    const bindings = Array.from(macMap.values());
+    res.json({ success: true, data: bindings });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get user MAC bindings' });
+  }
+});
+
 // Get all plans
 router.get('/plans', async (req: AuthRequest, res: Response) => {
   try {

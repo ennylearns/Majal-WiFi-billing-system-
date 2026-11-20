@@ -214,3 +214,10 @@ export interface StartTrialResponse {
     durationMinutes: number
   }
 }
+
+export interface MacBinding {
+  macAddress: string
+  lastSeen?: string
+  ipAddress?: string | null
+  routerId?: string | null
+}

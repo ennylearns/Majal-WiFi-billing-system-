@@ -19,7 +19,8 @@ import type {
   TrialStatus,
   StartTrialRequest,
   StartTrialResponse,
-  HealthCheckResponse
+  HealthCheckResponse,
+  MacBinding
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -121,6 +122,18 @@ export const adminAPI = {
     search?: string
   }): Promise<ApiResponse<PaginatedResponse<User>>> =>
     privateApi.get('/admin/users', { params }).then(res => res.data),
+
+  getUserSessions: (userId: string): Promise<ApiResponse<Session[]>> =>
+    privateApi.get(`/admin/users/${userId}/sessions`).then(res => res.data),
+
+  terminateUserSessions: (userId: string): Promise<ApiResponse<{ terminatedCount: number; message: string }>> =>
+    privateApi.post(`/admin/users/${userId}/terminate-sessions`).then(res => res.data),
+
+  toggleUserActive: (userId: string): Promise<ApiResponse<{ isActive: boolean; data: User }>> =>
+    privateApi.post(`/admin/users/${userId}/toggle-active`).then(res => res.data),
+
+  getUserMacBindings: (userId: string): Promise<ApiResponse<MacBinding[]>> =>
+    privateApi.get(`/admin/users/${userId}/mac-bindings`).then(res => res.data),
 
   // Plans
   getPlans: (): Promise<ApiResponse<Plan[]>> =>

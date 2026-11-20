@@ -4,15 +4,15 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `MoreVertical` button opens a dropdown or inline action panel (not a no-op)
-- [ ] "View Session History" action fetches and displays the user's sessions (plan name, start time, status, duration)
-- [ ] "Terminate Active Sessions" action calls a backend endpoint that sets all `ACTIVE` sessions for the user to `TERMINATED` and returns the count terminated
-- [ ] "Toggle Active/Inactive" action calls a backend endpoint that flips `User.isActive` and reflects the new state in the row without a full page reload
-- [ ] "View MAC Bindings" action fetches and displays all MAC addresses associated with the user
-- [ ] All four backend endpoints are protected by admin auth middleware
-- [ ] "Export Users" button is removed
-- [ ] "Filters" button is removed
-- [ ] Test: terminate endpoint sets all user's `ACTIVE` sessions to `TERMINATED` and returns the correct count
-- [ ] Test: toggle endpoint flips `isActive` from `true` to `false` and vice versa
+- [x] `MoreVertical` button opens a dropdown or inline action panel (not a no-op)
+- [x] "View Session History" action fetches and displays the user's sessions (plan name, start time, status, duration)
+- [x] "Terminate Active Sessions" action calls a backend endpoint that sets all `ACTIVE` sessions for the user to `TERMINATED` and returns the count terminated
+- [x] "Toggle Active/Inactive" action calls a backend endpoint that flips `User.isActive` and reflects the new state in the row without a full page reload
+- [x] "View MAC Bindings" action fetches and displays all MAC addresses associated with the user
+- [x] All four backend endpoints are protected by admin auth middleware
+- [x] "Export Users" button is removed
+- [x] "Filters" button is removed
+- [x] Test: terminate endpoint sets all user's `ACTIVE` sessions to `TERMINATED` and returns the correct count
+- [x] Test: toggle endpoint flips `isActive` from `true` to `false` and vice versa
