@@ -287,6 +287,31 @@ function makeFakePrisma(seed?: {
         });
         return matches.length;
       },
+      aggregate: async (args: any) => {
+        let matches = payments;
+        if (args?.where?.status !== undefined) {
+          matches = matches.filter(p => p.status === args.where.status);
+        }
+        if (args?.where?.userId !== undefined) {
+          matches = matches.filter(p => p.userId === args.where.userId);
+        }
+        if (args?.where?.createdAt) {
+          if (args.where.createdAt.gte) matches = matches.filter(p => p.createdAt >= args.where.createdAt.gte);
+          if (args.where.createdAt.lte) matches = matches.filter(p => p.createdAt <= args.where.createdAt.lte);
+        }
+        let sumAmount: number | null = null;
+        if (args?._sum?.amount) {
+          sumAmount = matches.reduce((acc, p) => acc + (p.amount || 0), 0);
+        }
+        return {
+          _sum: {
+            amount: sumAmount,
+          },
+          _count: {
+            id: matches.length,
+          },
+        };
+      },
       findUnique: async (args: any) => {
         const match = payments.find(p => p.id === args.where.id);
         if (!match) return null;
@@ -1332,6 +1357,40 @@ describe('PaymentService.listPayments — administrative queries & filtering', (
     // Search by email
     const searchEmail = await service.listPayments({ search: 'alice@' });
     assert.equal(searchEmail.payments.length, 2);
+  });
+
+  test('returns all-time aggregate totals (revenue, count, pending, failed) for seeded payments in various statuses', async () => {
+    // Seed an extra FAILED payment to test all statuses (COMPLETED, PENDING, FAILED)
+    prisma._payments.push({
+      id: 'pay-feb-failed',
+      userId: user2.id,
+      planId: plan1.id,
+      amount: 500,
+      status: 'FAILED',
+      checkoutRequestId: 'cr-feb-failed',
+      paymentReference: 'pr-feb-failed',
+      paymentMethod: 'PAYSTACK',
+      createdAt: new Date('2026-02-12T10:00:00Z'),
+      updatedAt: new Date('2026-02-12T10:00:00Z'),
+    });
+
+    // 2 COMPLETED (1000 + 1000 = 2000), 1 PENDING (1000), 1 FAILED (500) -> total count = 4
+    const result = await service.listPayments({});
+    assert.deepEqual(result.totals, {
+      revenue: 2000,
+      count: 4,
+      pending: 1,
+      failed: 1,
+    });
+
+    // Totals are all-time: not filtered by current query params (e.g. status filter or page/limit)
+    const filteredResult = await service.listPayments({ status: 'PENDING', page: 2, limit: 1 });
+    assert.deepEqual(filteredResult.totals, {
+      revenue: 2000,
+      count: 4,
+      pending: 1,
+      failed: 1,
+    });
   });
 });
 

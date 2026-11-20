@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { DollarSign, Download, Calendar, CreditCard } from 'lucide-react'
+import { DollarSign, Calendar, CreditCard } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import { formatCurrency } from '../utils/formatters'
 import toast from 'react-hot-toast'
@@ -7,6 +7,7 @@ import type { Payment } from '../types'
 
 const PaymentsManagement: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([])
+  const [totals, setTotals] = useState({ revenue: 0, count: 0, pending: 0, failed: 0 })
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -28,6 +29,10 @@ const PaymentsManagement: React.FC = () => {
       if (response.success && response.data) {
         setPayments(response.data.payments || response.data.data || [])
         setTotalPages(response.data.pagination.pages)
+        const totalsData = response.data.totals || response.totals
+        if (totalsData) {
+          setTotals(totalsData)
+        }
       }
     } catch (error) {
       toast.error('Failed to load payments')
@@ -46,10 +51,6 @@ const PaymentsManagement: React.FC = () => {
     }
   }
 
-  const totalRevenue = payments
-    .filter(p => p.status === 'COMPLETED')
-    .reduce((sum, p) => sum + p.amount, 0)
-
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Header */}
@@ -58,10 +59,6 @@ const PaymentsManagement: React.FC = () => {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-indigo-900 to-purple-900 bg-clip-text text-transparent">Payments Management</h1>
           <p className="text-gray-600 mt-1">Track and manage all payment transactions</p>
         </div>
-        <button className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-semibold rounded-xl hover:from-emerald-700 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl">
-          <Download className="w-4 h-4 mr-2" />
-          Export Report
-        </button>
       </div>
 
       {/* Stats Cards */}
@@ -77,7 +74,7 @@ const PaymentsManagement: React.FC = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totals.revenue)}</p>
           </div>
         </div>
         
@@ -92,7 +89,7 @@ const PaymentsManagement: React.FC = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-600 mb-1">Total Payments</p>
-            <p className="text-2xl font-bold text-gray-900">{payments.length}</p>
+            <p className="text-2xl font-bold text-gray-900">{totals.count}</p>
           </div>
         </div>
 
@@ -107,9 +104,7 @@ const PaymentsManagement: React.FC = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-600 mb-1">Pending</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {payments.filter(p => p.status === 'PENDING').length}
-            </p>
+            <p className="text-2xl font-bold text-gray-900">{totals.pending}</p>
           </div>
         </div>
 
@@ -124,9 +119,7 @@ const PaymentsManagement: React.FC = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-600 mb-1">Failed</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {payments.filter(p => p.status === 'FAILED').length}
-            </p>
+            <p className="text-2xl font-bold text-gray-900">{totals.failed}</p>
           </div>
         </div>
       </div>

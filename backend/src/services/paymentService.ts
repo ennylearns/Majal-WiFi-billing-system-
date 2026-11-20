@@ -67,6 +67,12 @@ export interface ListPaymentsResult {
     total: number;
     pages: number;
   };
+  totals: {
+    revenue: number;
+    count: number;
+    pending: number;
+    failed: number;
+  };
 }
 
 export interface SessionServiceLike {
@@ -567,7 +573,7 @@ export class PaymentService {
       };
     }
 
-    const [payments, total] = await Promise.all([
+    const [payments, total, revenueAgg, totalCount, pendingCount, failedCount] = await Promise.all([
       this.prisma.payment.findMany({
         where,
         skip,
@@ -590,6 +596,13 @@ export class PaymentService {
         },
       }),
       this.prisma.payment.count({ where }),
+      this.prisma.payment.aggregate({
+        where: { status: 'COMPLETED' },
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.count(),
+      this.prisma.payment.count({ where: { status: 'PENDING' } }),
+      this.prisma.payment.count({ where: { status: 'FAILED' } }),
     ]);
 
     return {
@@ -599,6 +612,12 @@ export class PaymentService {
         limit,
         total,
         pages: Math.ceil(total / limit),
+      },
+      totals: {
+        revenue: revenueAgg._sum.amount ?? 0,
+        count: totalCount,
+        pending: pendingCount,
+        failed: failedCount,
       },
     };
   }

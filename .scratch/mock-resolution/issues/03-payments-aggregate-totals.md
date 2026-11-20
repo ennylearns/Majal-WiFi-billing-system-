@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `GET /api/admin/payments` response includes a `totals` object: `{ revenue: number, count: number, pending: number, failed: number }`
-- [ ] Totals are all-time (not filtered by the current page's date range or cursor)
-- [ ] Totals are computed via database aggregation, not `Array.reduce` in the handler
-- [ ] Payments page KPI cards read from `response.totals`, not `payments.reduce(...)`
-- [ ] "Export Report" button is removed from the Payments page
-- [ ] Test: payments list response includes correct `totals` for a seeded set of payments in various statuses (using the in-memory stub pattern from `paymentService.test.ts`)
+- [x] `GET /api/admin/payments` response includes a `totals` object: `{ revenue: number, count: number, pending: number, failed: number }`
+- [x] Totals are all-time (not filtered by the current page's date range or cursor)
+- [x] Totals are computed via database aggregation, not `Array.reduce` in the handler
+- [x] Payments page KPI cards read from `response.totals`, not `payments.reduce(...)`
+- [x] "Export Report" button is removed from the Payments page
+- [x] Test: payments list response includes correct `totals` for a seeded set of payments in various statuses (using the in-memory stub pattern from `paymentService.test.ts`)

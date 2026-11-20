@@ -330,7 +330,8 @@ router.get('/payments', async (req: AuthRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: result
+      data: result,
+      totals: result.totals
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get payments' });

@@ -90,6 +90,12 @@ export interface ApiResponse<T> {
   data?: T
   error?: string
   errors?: Array<{ msg: string; param: string }>
+  totals?: {
+    revenue: number
+    count: number
+    pending: number
+    failed: number
+  }
 }
 
 export interface PaginatedResponse<T> {
@@ -102,6 +108,12 @@ export interface PaginatedResponse<T> {
     limit: number
     total: number
     pages: number
+  }
+  totals?: {
+    revenue: number
+    count: number
+    pending: number
+    failed: number
   }
 }
 

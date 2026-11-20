@@ -308,6 +308,15 @@ describe('Payment History & Admin Payment Queries - Integration Tests', () => {
     assert.equal(typeof body.data.pagination.limit, 'number');
     assert.equal(typeof body.data.pagination.total, 'number');
     assert.equal(typeof body.data.pagination.pages, 'number');
+
+    // Totals object included in response
+    assert.ok(body.totals || body.data.totals);
+    const totals = body.totals || body.data.totals;
+    assert.equal(typeof totals.revenue, 'number');
+    assert.equal(typeof totals.count, 'number');
+    assert.equal(typeof totals.pending, 'number');
+    assert.equal(typeof totals.failed, 'number');
+    assert.ok(totals.count >= 3);
   });
 
   test('GET /api/admin/payments supports pagination with page and limit parameters', async () => {
