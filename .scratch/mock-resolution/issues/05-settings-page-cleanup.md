@@ -4,13 +4,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] General tab fields (business name, support email) are read-only, sourced from env vars exposed by a backend endpoint or build-time config
-- [ ] Paystack tab shows webhook URL and public key as read-only; secret key is masked or omitted; "Save Paystack Settings" button is removed
-- [ ] Router tab renders a navigational card with a link/button to `/admin/routers`; the IP/port/username/password form is gone
-- [ ] "Test Connection" button in the old Router tab form is removed
-- [ ] `settings.router.*` state and `renderRouterSettings` function are deleted
-- [ ] Security tab entry and render function are deleted
-- [ ] Database tab entry and render function are deleted
-- [ ] No `toast.success` calls remain on any "Save" action in the Settings page
+- [x] General tab fields (business name, support email) are read-only, sourced from env vars exposed by a backend endpoint or build-time config
+- [x] Paystack tab shows webhook URL and public key as read-only; secret key is masked or omitted; "Save Paystack Settings" button is removed
+- [x] Router tab renders a navigational card with a link/button to `/admin/routers`; the IP/port/username/password form is gone
+- [x] "Test Connection" button in the old Router tab form is removed
+- [x] `settings.router.*` state and `renderRouterSettings` function are deleted
+- [x] Security tab entry and render function are deleted
+- [x] Database tab entry and render function are deleted
+- [x] No `toast.success` calls remain on any "Save" action in the Settings page

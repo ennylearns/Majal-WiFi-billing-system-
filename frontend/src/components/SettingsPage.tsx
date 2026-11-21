@@ -1,279 +1,183 @@
 import React, { useState } from 'react'
-import { Settings, Wifi, DollarSign, Bell, Shield, Database, Save } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { Link } from 'react-router-dom'
+import { Settings, Wifi, DollarSign, Bell, ArrowRight } from 'lucide-react'
 
 const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('general')
-  const [settings, setSettings] = useState({
-    general: {
-      systemName: 'COLLOSPOT',
-      companyName: 'COLLOSPOT Ltd',
-      supportEmail: 'support@collospot.com',
-      supportPhone: '+254700000000',
-      timezone: 'Africa/Nairobi'
-    },
-    paystack: {
-      secretKey: '',
-      publicKey: '',
-      webhookUrl: '/api/public/payment/paystack/webhook'
-    },
-    router: {
-      host: '192.168.1.1',
-      username: 'admin',
-      password: '',
-      port: '8728'
-    },
-    notifications: {
-      emailNotifications: true,
-      smsNotifications: true,
-      paymentAlerts: true,
-      sessionAlerts: false
-    }
-  })
+
+  const generalConfig = {
+    businessName: import.meta.env.VITE_BUSINESS_NAME || import.meta.env.VITE_SYSTEM_NAME || 'Majal ISP',
+    companyName: import.meta.env.VITE_COMPANY_NAME || 'Majal ISP Ltd',
+    supportEmail: import.meta.env.VITE_SUPPORT_EMAIL || 'support@majalisp.com',
+    supportPhone: import.meta.env.VITE_SUPPORT_PHONE || '+254700000000',
+    timezone: import.meta.env.VITE_TIMEZONE || 'Africa/Nairobi'
+  }
+
+  const paystackConfig = {
+    webhookUrl: import.meta.env.VITE_PAYSTACK_WEBHOOK_URL || '/api/public/payment/paystack/webhook',
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder',
+    secretKey: '••••••••••••••••••••••••••••••••'
+  }
 
   const tabs = [
     { id: 'general', name: 'General', icon: Settings },
     { id: 'paystack', name: 'Paystack', icon: DollarSign },
     { id: 'router', name: 'Router', icon: Wifi },
-    { id: 'notifications', name: 'Notifications', icon: Bell },
-    { id: 'security', name: 'Security', icon: Shield },
-    { id: 'database', name: 'Database', icon: Database }
+    { id: 'notifications', name: 'Notifications', icon: Bell }
   ]
-
-  const handleSave = (section: string) => {
-    toast.success(`${section} settings saved successfully`)
-  }
 
   const renderGeneralSettings = () => (
     <div className="space-y-6">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
+        <p>System configuration values are read-only and sourced from deployment environment variables.</p>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">System Name</label>
+          <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-2">Business / System Name</label>
           <input
+            id="businessName"
             type="text"
-            value={settings.general.systemName}
-            onChange={(e) => setSettings({
-              ...settings,
-              general: { ...settings.general, systemName: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            readOnly
+            value={generalConfig.businessName}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+          <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
           <input
+            id="companyName"
             type="text"
-            value={settings.general.companyName}
-            onChange={(e) => setSettings({
-              ...settings,
-              general: { ...settings.general, companyName: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            readOnly
+            value={generalConfig.companyName}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Support Email</label>
+          <label htmlFor="supportEmail" className="block text-sm font-medium text-gray-700 mb-2">Support Email</label>
           <input
+            id="supportEmail"
             type="email"
-            value={settings.general.supportEmail}
-            onChange={(e) => setSettings({
-              ...settings,
-              general: { ...settings.general, supportEmail: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            readOnly
+            value={generalConfig.supportEmail}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Support Phone</label>
+          <label htmlFor="supportPhone" className="block text-sm font-medium text-gray-700 mb-2">Support Phone</label>
           <input
+            id="supportPhone"
             type="tel"
-            value={settings.general.supportPhone}
-            onChange={(e) => setSettings({
-              ...settings,
-              general: { ...settings.general, supportPhone: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            readOnly
+            value={generalConfig.supportPhone}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
+          />
+        </div>
+        <div>
+          <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
+          <input
+            id="timezone"
+            type="text"
+            readOnly
+            value={generalConfig.timezone}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed focus:outline-none"
           />
         </div>
       </div>
-      <button
-        onClick={() => handleSave('General')}
-        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-      >
-        <Save className="w-4 h-4 mr-2" />
-        Save Changes
-      </button>
     </div>
   )
 
   const renderPaystackSettings = () => (
     <div className="space-y-6">
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <p className="text-sm text-yellow-800">
-          <strong>Warning:</strong> These are sensitive API keys. Make sure to keep them secure.
-        </p>
-      </div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
         <p className="font-semibold mb-1">Webhook Configuration</p>
-        <p>Register the webhook URL <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs">/api/public/payment/paystack/webhook</code> in your Paystack dashboard under <strong>Settings → API Keys &amp; Webhooks</strong>.</p>
+        <p>Register the webhook URL <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs">{paystackConfig.webhookUrl}</code> in your Paystack dashboard under <strong>Settings → API Keys &amp; Webhooks</strong>.</p>
+      </div>
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
+        <p>Paystack integration values are configured via deployment environment variables. Secret key is masked and protected on the server.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Secret Key</label>
+          <label htmlFor="paystackPublicKey" className="block text-sm font-medium text-gray-700 mb-2">Public Key</label>
           <input
-            type="password"
-            value={settings.paystack.secretKey}
-            onChange={(e) => setSettings({
-              ...settings,
-              paystack: { ...settings.paystack, secretKey: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="sk_test_... or sk_live_..."
+            id="paystackPublicKey"
+            type="text"
+            readOnly
+            value={paystackConfig.publicKey}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed font-mono text-sm focus:outline-none"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Public Key</label>
+          <label htmlFor="paystackSecretKey" className="block text-sm font-medium text-gray-700 mb-2">Secret Key</label>
           <input
+            id="paystackSecretKey"
             type="text"
-            value={settings.paystack.publicKey}
-            onChange={(e) => setSettings({
-              ...settings,
-              paystack: { ...settings.paystack, publicKey: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="pk_test_... or pk_live_..."
+            readOnly
+            value={paystackConfig.secretKey}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed font-mono text-sm focus:outline-none"
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label htmlFor="paystackWebhookUrl" className="block text-sm font-medium text-gray-700 mb-2">Webhook URL</label>
+          <input
+            id="paystackWebhookUrl"
+            type="text"
+            readOnly
+            value={paystackConfig.webhookUrl}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed font-mono text-sm focus:outline-none"
           />
         </div>
       </div>
-      <button
-        onClick={() => handleSave('Paystack')}
-        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center"
-      >
-        <Save className="w-4 h-4 mr-2" />
-        Save Paystack Settings
-      </button>
     </div>
   )
 
-  const renderRouterSettings = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Router IP Address</label>
-          <input
-            type="text"
-            value={settings.router.host}
-            onChange={(e) => setSettings({
-              ...settings,
-              router: { ...settings.router, host: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">API Port</label>
-          <input
-            type="text"
-            value={settings.router.port}
-            onChange={(e) => setSettings({
-              ...settings,
-              router: { ...settings.router, port: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-          <input
-            type="text"
-            value={settings.router.username}
-            onChange={(e) => setSettings({
-              ...settings,
-              router: { ...settings.router, username: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-          <input
-            type="password"
-            value={settings.router.password}
-            onChange={(e) => setSettings({
-              ...settings,
-              router: { ...settings.router, password: e.target.value }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
+  const renderRouterTab = () => (
+    <div className="bg-white border border-gray-200 rounded-xl p-8 max-w-xl text-center space-y-4">
+      <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto text-blue-600">
+        <Wifi className="w-6 h-6" />
       </div>
-      <div className="flex space-x-4">
-        <button
-          onClick={() => toast.success('Router connection tested successfully')}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900">Router Management</h3>
+        <p className="text-sm text-gray-600 mt-1">
+          Router configuration, credentials, status diagnostics, and provisioning scripts are managed centrally under Routers.
+        </p>
+      </div>
+      <div>
+        <Link
+          to="/admin/routers"
+          className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
         >
-          Test Connection
-        </button>
-        <button
-          onClick={() => handleSave('Router')}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          Save Settings
-        </button>
+          Go to Routers Management
+          <ArrowRight className="w-4 h-4 ml-2" />
+        </Link>
       </div>
     </div>
   )
 
   const renderNotificationSettings = () => (
     <div className="space-y-6">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
+        <p>Notification channels are configured via server environment variables.</p>
+      </div>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between py-3 border-b border-gray-100">
           <div>
             <h4 className="text-sm font-medium text-gray-900">Email Notifications</h4>
-            <p className="text-sm text-gray-500">Receive email alerts for important events</p>
+            <p className="text-sm text-gray-500">Alerts sent via configured SMTP provider</p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.notifications.emailNotifications}
-              onChange={(e) => setSettings({
-                ...settings,
-                notifications: { ...settings.notifications, emailNotifications: e.target.checked }
-              })}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-          </label>
+          <span className="text-xs font-mono font-medium px-2.5 py-1 bg-green-100 text-green-800 rounded-full">
+            Active (Env)
+          </span>
         </div>
-        
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between py-3 border-b border-gray-100">
           <div>
             <h4 className="text-sm font-medium text-gray-900">SMS Notifications</h4>
-            <p className="text-sm text-gray-500">Send SMS alerts to customers</p>
+            <p className="text-sm text-gray-500">Alerts sent via Africa's Talking provider</p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.notifications.smsNotifications}
-              onChange={(e) => setSettings({
-                ...settings,
-                notifications: { ...settings.notifications, smsNotifications: e.target.checked }
-              })}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-          </label>
+          <span className="text-xs font-mono font-medium px-2.5 py-1 bg-green-100 text-green-800 rounded-full">
+            Active (Env)
+          </span>
         </div>
       </div>
-      
-      <button
-        onClick={() => handleSave('Notification')}
-        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-      >
-        <Save className="w-4 h-4 mr-2" />
-        Save Preferences
-      </button>
     </div>
   )
 
@@ -282,7 +186,7 @@ const SettingsPage: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
-        <p className="text-gray-600">Configure your WiFi billing system</p>
+        <p className="text-gray-600">Environment configuration and deployment settings</p>
       </div>
 
       {/* Tabs */}
@@ -309,20 +213,8 @@ const SettingsPage: React.FC = () => {
         <div className="p-6">
           {activeTab === 'general' && renderGeneralSettings()}
           {activeTab === 'paystack' && renderPaystackSettings()}
-          {activeTab === 'router' && renderRouterSettings()}
+          {activeTab === 'router' && renderRouterTab()}
           {activeTab === 'notifications' && renderNotificationSettings()}
-          {activeTab === 'security' && (
-            <div className="text-center py-12">
-              <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Security settings coming soon...</p>
-            </div>
-          )}
-          {activeTab === 'database' && (
-            <div className="text-center py-12">
-              <Database className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Database management coming soon...</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
