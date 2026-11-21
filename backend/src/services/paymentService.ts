@@ -76,8 +76,8 @@ export interface ListPaymentsResult {
 }
 
 export interface SessionServiceLike {
-  createSession(userId: string, planId: string, sessionToken: string): Promise<any>;
-  upgradeTrialSession?(sessionId: string, planId: string, userId?: string): Promise<any>;
+  createSession(userId: string, planId: string, sessionToken: string, phone?: string, email?: string): Promise<any>;
+  upgradeTrialSession?(sessionId: string, planId: string, userId?: string, phone?: string, email?: string): Promise<any>;
 }
 
 export interface SmsServiceLike {
@@ -198,10 +198,16 @@ export class PaymentService {
     if (payload.event === 'charge.success') {
       const reference = payload.data?.reference;
       const paymentId = payload.data?.metadata?.paymentId;
+      const customerEmail = payload.data?.customer?.email;
+      const customerPhone = payload.data?.customer?.phone;
+      const customerInfo = {
+        email: typeof customerEmail === 'string' ? customerEmail : undefined,
+        phone: typeof customerPhone === 'string' ? customerPhone : undefined,
+      };
 
       if (reference) {
         try {
-          await this.fulfillPayment(reference);
+          await this.fulfillPayment(reference, undefined, customerInfo);
           return { received: true };
         } catch (err: any) {
           if (err.message !== 'Payment not found' || !paymentId) {
@@ -211,7 +217,7 @@ export class PaymentService {
       }
 
       if (paymentId) {
-        await this.fulfillPayment(paymentId, reference);
+        await this.fulfillPayment(paymentId, reference, customerInfo);
       }
     }
 
@@ -224,7 +230,10 @@ export class PaymentService {
    * If the payment is still PENDING in the database, queries the payment gateway.
    * If the gateway confirms settlement, fulfills the payment and returns the active session token.
    */
-  async checkStatus(reference: string): Promise<CheckStatusResult> {
+  async checkStatus(
+    reference: string,
+    customerInfo?: { phone?: string; email?: string }
+  ): Promise<CheckStatusResult> {
     const payment = await this.findPayment(reference);
 
     if (!payment) {
@@ -234,7 +243,7 @@ export class PaymentService {
     if (payment.status === 'COMPLETED') {
       // Best-effort fulfillment (idempotent): if it fails, still return completed status.
       try {
-        const fulfillment = await this.fulfillPayment(reference);
+        const fulfillment = await this.fulfillPayment(reference, undefined, customerInfo);
         return {
           status: 'completed',
           amount: payment.amount,
@@ -247,12 +256,22 @@ export class PaymentService {
     }
 
     // Payment is pending - query gateway
-    const verifyResult = await this.gateway.verifyTransaction(reference);
-    if (verifyResult.status === 'success') {
+    let verifyResult: any = null;
+    try {
+      verifyResult = await this.gateway.verifyTransaction(reference);
+    } catch {
+      return {
+        status: payment.status.toLowerCase(),
+        amount: payment.amount,
+        payment,
+      };
+    }
+
+    if (verifyResult && verifyResult.status === 'success') {
       // Best-effort fulfillment: if session provisioning fails (e.g. router offline),
       // report the payment as completed — the session can be retried later.
       try {
-        const fulfillment = await this.fulfillPayment(reference);
+        const fulfillment = await this.fulfillPayment(reference, undefined, customerInfo);
         return {
           status: 'completed',
           amount: payment.amount,
@@ -287,7 +306,8 @@ export class PaymentService {
    */
   async fulfillPayment(
     referenceOrId: string,
-    gatewayReference?: string
+    gatewayReference?: string,
+    customerInfo?: { phone?: string; email?: string }
   ): Promise<FulfillPaymentResult> {
     const payment = await this.findPayment(referenceOrId);
     if (!payment) {
@@ -302,7 +322,7 @@ export class PaymentService {
 
     const promise = (async () => {
       try {
-        return await this.doFulfillPayment(payment, referenceOrId, gatewayReference);
+        return await this.doFulfillPayment(payment, referenceOrId, gatewayReference, customerInfo);
       } finally {
         this.inFlightFulfillments.delete(dedupeKey);
       }
@@ -315,7 +335,8 @@ export class PaymentService {
   private async doFulfillPayment(
     payment: any,
     referenceOrId: string,
-    gatewayReference?: string
+    gatewayReference?: string,
+    customerInfo?: { phone?: string; email?: string }
   ): Promise<FulfillPaymentResult> {
     const finalReference =
       gatewayReference || payment.paymentReference || payment.checkoutRequestId || referenceOrId;
@@ -372,6 +393,25 @@ export class PaymentService {
     // Winner of the transition: provision network session and dispatch receipt SMS
     let existingSession = await this.findActiveSession(payment.userId, payment.planId, payment.macAddress);
 
+    // Resolve phone/email from customerInfo or payment's linked user record for session stamping
+    let sessionPhone: string | undefined = customerInfo?.phone ?? payment.user?.phone ?? undefined;
+    let sessionEmail: string | undefined = customerInfo?.email ?? payment.user?.email ?? undefined;
+
+    if ((!sessionPhone || !sessionEmail) && payment.userId) {
+      try {
+        const u = await this.prisma.user.findUnique({
+          where: { id: payment.userId },
+          select: { phone: true, email: true },
+        });
+        if (u) {
+          sessionPhone = sessionPhone ?? u.phone ?? undefined;
+          sessionEmail = sessionEmail ?? u.email ?? undefined;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     let sessionToken = existingSession?.sessionToken;
     if (!sessionToken) {
       const activeTrial = await this.findActiveTrialSession({
@@ -383,7 +423,9 @@ export class PaymentService {
         const upgradedSession = await this.sessionService.upgradeTrialSession(
           activeTrial.id,
           payment.planId,
-          payment.userId
+          payment.userId,
+          sessionPhone,
+          sessionEmail
         );
         sessionToken = upgradedSession.sessionToken;
       } else {
@@ -391,7 +433,9 @@ export class PaymentService {
         await this.sessionService.createSession(
           payment.userId,
           payment.planId,
-          sessionToken
+          sessionToken,
+          sessionPhone,
+          sessionEmail
         );
       }
     }

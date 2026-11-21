@@ -40,6 +40,8 @@ export interface Session {
   planId: string
   macAddress?: string
   ipAddress?: string
+  phone?: string
+  email?: string
   startTime: string
   endTime?: string
   status: 'ACTIVE' | 'EXPIRED' | 'TERMINATED'

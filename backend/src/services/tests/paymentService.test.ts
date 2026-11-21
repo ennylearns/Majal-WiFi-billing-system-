@@ -44,6 +44,8 @@ interface FakeSession {
   dataUsed: bigint;
   startTime: Date;
   endTime: Date | null;
+  phone?: string | null;
+  email?: string | null;
   isTrial?: boolean;
   wasTrial?: boolean;
   macAddress?: string | null;
@@ -628,12 +630,14 @@ class FakeSessionService {
   public sessions: any[] = [];
   constructor(private prisma?: any) {}
 
-  async createSession(userId: string, planId: string, sessionToken: string) {
+  async createSession(userId: string, planId: string, sessionToken: string, phone?: string, email?: string) {
     const sess = {
       id: makeId(),
       userId,
       planId,
       sessionToken,
+      phone: phone ?? null,
+      email: email ?? null,
       status: 'ACTIVE',
       startTime: new Date(),
       endTime: new Date(Date.now() + 3600000),
@@ -748,6 +752,38 @@ describe('PaymentService.handleWebhook & fulfillPayment — successful charge fu
     assert.equal(fakeSms.sentConfirmations[0].phone, user.phone);
     assert.equal(fakeSms.sentConfirmations[0].amount, 200);
     assert.equal(fakeSms.sentConfirmations[0].receipt, 'checkout_ref_001');
+  });
+
+  test('stores customer phone and email on session record on fulfillment', async () => {
+    const userWithEmail = existingUser({ phone: '+254799887766', email: 'guest@example.com' });
+    prisma._users.push(userWithEmail);
+    const payment = await prisma.payment.create({
+      data: {
+        userId: userWithEmail.id,
+        planId: plan.id,
+        amount: 250,
+        status: 'PENDING',
+        checkoutRequestId: 'checkout_identity_001'
+      }
+    });
+
+    const payload = JSON.stringify({
+      event: 'charge.success',
+      data: {
+        reference: 'checkout_identity_001',
+        amount: 25000,
+        customer: {
+          phone: '+254799887766',
+          email: 'guest@example.com'
+        }
+      }
+    });
+    const sig = gateway.createWebhookSignature(payload);
+    await service.handleWebhook(payload, sig);
+
+    assert.equal(fakeSession.sessions.length, 1);
+    assert.equal(fakeSession.sessions[0].phone, '+254799887766');
+    assert.equal(fakeSession.sessions[0].email, 'guest@example.com');
   });
 
   test('fulfills payment using metadata paymentId when reference lookup falls back', async () => {

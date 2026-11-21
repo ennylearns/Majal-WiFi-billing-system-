@@ -28,6 +28,13 @@ const CustomerPortal: React.FC = () => {
   const [connectedSession, setConnectedSession] = useState<ConnectedSessionInfo | null>(null)
   const isPaymentConfirmedRef = useRef(false)
 
+  // Identity prompt state
+  const [guestPhone, setGuestPhone] = useState('')
+  const [guestEmail, setGuestEmail] = useState('')
+  const [showIdentityPrompt, setShowIdentityPrompt] = useState(false)
+  const [identityErrors, setIdentityErrors] = useState<{ phone?: string; email?: string }>({})
+  const pendingPlanRef = useRef<Plan | null>(null)
+
   // Trial state & client parameters forwarded by captive portal redirect
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null)
   const [trialLoading, setTrialLoading] = useState(false)
@@ -38,6 +45,10 @@ const CustomerPortal: React.FC = () => {
 
   const clientMac = searchParams.get('mac') || searchParams.get('macAddress')
   const clientIp = searchParams.get('ip') || searchParams.get('ipAddress')
+
+  // Identity pre-population from captive portal handoff query params
+  const paramPhone = searchParams.get('phone') || ''
+  const paramEmail = searchParams.get('email') || ''
 
   const rawRouterParam = searchParams.get('routerId') || searchParams.get('router')
 
@@ -165,6 +176,41 @@ const CustomerPortal: React.FC = () => {
   }
 
   const handlePay = async (plan: Plan) => {
+    // Determine the effective identity values to use
+    const effectivePhone = guestPhone || paramPhone
+    const effectiveEmail = guestEmail || paramEmail
+
+    // If both phone and email are not available, show the identity prompt first
+    if (!effectivePhone || !effectiveEmail) {
+      pendingPlanRef.current = plan
+      setSelectedPlan(plan)
+      setIdentityErrors({})
+      // Pre-populate fields from URL params if available
+      if (paramPhone && !guestPhone) setGuestPhone(paramPhone)
+      if (paramEmail && !guestEmail) setGuestEmail(paramEmail)
+      setShowIdentityPrompt(true)
+      return
+    }
+
+    await doInitiatePayment(plan, effectivePhone, effectiveEmail)
+  }
+
+  const handleIdentitySubmit = async () => {
+    const errors: { phone?: string; email?: string } = {}
+    if (!guestPhone.trim()) errors.phone = 'Phone number is required'
+    if (!guestEmail.trim()) errors.email = 'Email address is required'
+    if (Object.keys(errors).length > 0) {
+      setIdentityErrors(errors)
+      return
+    }
+    setShowIdentityPrompt(false)
+    const plan = pendingPlanRef.current
+    if (plan) {
+      await doInitiatePayment(plan, guestPhone.trim(), guestEmail.trim())
+    }
+  }
+
+  const doInitiatePayment = async (plan: Plan, phone: string, email: string) => {
     setSelectedPlan(plan)
     setShowPayment(true)
     setPaymentStatus('initiating')
@@ -176,6 +222,8 @@ const CustomerPortal: React.FC = () => {
         planId: plan.id,
         amount: plan.price,
         macAddress: clientMac || undefined,
+        phone: phone || undefined,
+        email: email || undefined,
       })
 
       const reference = response.data?.reference || (response as any).reference
@@ -185,7 +233,7 @@ const CustomerPortal: React.FC = () => {
         throw new Error('No payment reference returned from server')
       }
 
-      openPaystackPopup(reference, accessCode, plan)
+      openPaystackPopup(reference, accessCode, plan, phone, email)
     } catch (error: any) {
       setLoading(false)
       setPaymentStatus(null)
@@ -194,16 +242,24 @@ const CustomerPortal: React.FC = () => {
     }
   }
 
-  const openPaystackPopup = (reference: string, accessCode: string | undefined, plan: Plan) => {
+  const openPaystackPopup = (
+    reference: string,
+    accessCode: string | undefined,
+    plan: Plan,
+    phone?: string,
+    email?: string
+  ) => {
     const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || ''
     const PaystackClass = (window as any).PaystackPop
+    const customerEmail = email || guestEmail || paramEmail || 'customer@collospot.com'
+    const customerPhone = phone || guestPhone || paramPhone || ''
 
     const handleSuccess = (transaction: any) => {
       isPaymentConfirmedRef.current = true
       setPaymentStatus('verifying')
       setLoading(true)
       const txnRef = transaction?.reference || reference
-      pollPaymentStatus(txnRef, plan)
+      pollPaymentStatus(txnRef, plan, customerPhone, customerEmail)
     }
 
     const handleClose = () => {
@@ -218,7 +274,11 @@ const CustomerPortal: React.FC = () => {
       if (typeof PaystackClass.setup === 'function') {
         const handler = PaystackClass.setup({
           key: publicKey,
-          email: 'customer@collospot.com',
+          email: customerEmail,
+          customer: {
+            email: customerEmail,
+            phone: customerPhone,
+          },
           amount: Math.round(plan.price * 100),
           ref: reference,
           access_code: accessCode,
@@ -237,6 +297,11 @@ const CustomerPortal: React.FC = () => {
         const popup = new PaystackClass()
         popup.checkout({
           key: publicKey,
+          email: customerEmail,
+          customer: {
+            email: customerEmail,
+            phone: customerPhone,
+          },
           accessCode: accessCode,
           reference: reference,
           onSuccess: (transaction: any) => {
@@ -258,13 +323,13 @@ const CustomerPortal: React.FC = () => {
     }
   }
 
-  const pollPaymentStatus = async (reference: string, plan: Plan) => {
+  const pollPaymentStatus = async (reference: string, plan: Plan, phone?: string, email?: string) => {
     const maxAttempts = 30
     let attempts = 0
 
     const poll = async () => {
       try {
-        const response = await publicAPI.getPaymentStatus(reference)
+        const response = await publicAPI.getPaymentStatus(reference, { phone, email })
 
         if (response.success && response.data) {
           const { status, sessionToken } = response.data
@@ -902,6 +967,110 @@ const CustomerPortal: React.FC = () => {
           </div>
         </section>
       </main>
+
+      {/* Identity Prompt Modal Dialog */}
+      {showIdentityPrompt && (
+        <div
+          data-testid="identity-prompt-modal"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-surface-card rounded-card border border-border-subtle shadow-card p-6 max-w-sm w-full relative">
+            <button
+              onClick={() => {
+                setShowIdentityPrompt(false)
+                pendingPlanRef.current = null
+              }}
+              className="absolute top-4 right-4 text-text-muted hover:text-text-primary p-1 rounded transition-colors"
+              aria-label="Close"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+
+            <div>
+              <span className="text-xs font-semibold text-primary uppercase tracking-wider micro-label">
+                Guest Checkout
+              </span>
+              <h4 className="text-lg font-bold text-text-primary mt-0.5">
+                Contact Information
+              </h4>
+              <p className="text-xs text-text-muted mt-1">
+                Enter your phone number and email to receive your access receipt and payment confirmation.
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleIdentitySubmit()
+              }}
+              className="mt-4 space-y-4"
+            >
+              <div>
+                <label htmlFor="guest-phone" className="block text-xs font-medium text-text-primary mb-1">
+                  Phone Number <span className="text-status-danger">*</span>
+                </label>
+                <input
+                  id="guest-phone"
+                  name="phone"
+                  type="tel"
+                  placeholder="e.g. 0712345678"
+                  value={guestPhone}
+                  onChange={(e) => {
+                    setGuestPhone(e.target.value)
+                    if (identityErrors.phone) {
+                      setIdentityErrors((prev) => ({ ...prev, phone: undefined }))
+                    }
+                  }}
+                  className={`w-full px-3 py-2 text-sm rounded-control border bg-surface-canvas text-text-primary focus:outline-none focus:ring-1 ${
+                    identityErrors.phone
+                      ? 'border-status-danger focus:border-status-danger focus:ring-status-danger'
+                      : 'border-border-subtle focus:border-primary focus:ring-primary'
+                  }`}
+                />
+                {identityErrors.phone && (
+                  <p className="text-xs text-status-danger mt-1">{identityErrors.phone}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="guest-email" className="block text-xs font-medium text-text-primary mb-1">
+                  Email Address <span className="text-status-danger">*</span>
+                </label>
+                <input
+                  id="guest-email"
+                  name="email"
+                  type="email"
+                  placeholder="e.g. guest@example.com"
+                  value={guestEmail}
+                  onChange={(e) => {
+                    setGuestEmail(e.target.value)
+                    if (identityErrors.email) {
+                      setIdentityErrors((prev) => ({ ...prev, email: undefined }))
+                    }
+                  }}
+                  className={`w-full px-3 py-2 text-sm rounded-control border bg-surface-canvas text-text-primary focus:outline-none focus:ring-1 ${
+                    identityErrors.email
+                      ? 'border-status-danger focus:border-status-danger focus:ring-status-danger'
+                      : 'border-border-subtle focus:border-primary focus:ring-primary'
+                  }`}
+                />
+                {identityErrors.email && (
+                  <p className="text-xs text-status-danger mt-1">{identityErrors.email}</p>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full h-10 rounded-control bg-primary hover:bg-primary-hover text-white font-medium text-xs flex items-center justify-center transition-colors shadow-sm"
+                >
+                  Continue to Paystack
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Checkout / Payment Modal Dialog */}
       {showPayment && (

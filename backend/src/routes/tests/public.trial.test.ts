@@ -225,7 +225,7 @@ describe('Public Trial Routes - /api/public/trial', () => {
       });
     }
 
-    const clientMac = `00:99:88:77:66:${Math.floor(10 + Math.random() * 89)}`;
+    const clientMac = `00:99:${Math.floor(10 + Math.random() * 89)}:${Math.floor(10 + Math.random() * 89)}:${Math.floor(10 + Math.random() * 89)}:${Math.floor(10 + Math.random() * 89)}`;
 
     // 2. Start free trial
     const trialRes = await fetch(`${baseUrl}/start`, {

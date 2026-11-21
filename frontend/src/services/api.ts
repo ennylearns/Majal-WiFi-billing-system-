@@ -69,6 +69,7 @@ export const publicAPI = {
     publicApi.get('/public/plans', { params }).then(res => res.data),
 
   // User registration/login
+  // TODO (future): wire publicAPI.register to a UI entry point
   register: (data: {
     phone: string
     email?: string
@@ -77,6 +78,7 @@ export const publicAPI = {
   }): Promise<ApiResponse<{ user: User; token: string }>> =>
     publicApi.post('/public/register', data).then(res => res.data),
 
+  // TODO (future): wire publicAPI.login to a UI entry point
   login: (data: { phone: string }): Promise<ApiResponse<{ user: User; token: string }>> =>
     publicApi.post('/public/login', data).then(res => res.data),
 
@@ -84,8 +86,11 @@ export const publicAPI = {
   makePayment: (data: PaymentRequest): Promise<ApiResponse<PaymentInitiateData> & { reference?: string; access_code?: string }> =>
     publicApi.post('/public/payment', data).then(res => res.data),
 
-  getPaymentStatus: (checkoutRequestId: string): Promise<ApiResponse<PaymentStatusResponse>> =>
-    publicApi.get(`/public/payment/status/${checkoutRequestId}`).then(res => res.data),
+  getPaymentStatus: (checkoutRequestId: string, params?: { phone?: string; email?: string }): Promise<ApiResponse<PaymentStatusResponse>> =>
+    publicApi.get(`/public/payment/status/${checkoutRequestId}`, { params }).then(res => res.data),
+
+  fulfillPayment: (data: { reference: string; phone?: string; email?: string }): Promise<ApiResponse<any>> =>
+    publicApi.post('/public/payment/fulfill', data).then(res => res.data),
 
   // Connection
   connect: (data: ConnectionRequest): Promise<ApiResponse<{ message: string; session: any }>> =>

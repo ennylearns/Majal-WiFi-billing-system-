@@ -226,9 +226,7 @@ describe('CustomerPortal Component', () => {
     })
   })
 
-  it('renders checkout modal when payment is triggered', async () => {
-    vi.mocked(publicAPI.makePayment).mockReturnValue(new Promise(() => {}))
-
+  it('renders identity prompt modal when payment is triggered without contact params', async () => {
     render(
       <MemoryRouter initialEntries={['/?routerId=router-1']}>
         <CustomerPortal />
@@ -242,12 +240,136 @@ describe('CustomerPortal Component', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Pay/i })[0])
 
     await waitFor(() => {
-      expect(screen.getByText(/Opening Paystack Checkout/i)).toBeInTheDocument()
+      expect(screen.getByTestId('identity-prompt-modal')).toBeInTheDocument()
+      expect(screen.getByText(/Contact Information/i)).toBeInTheDocument()
+    })
+  })
+
+  it('skips identity prompt modal when phone and email are present in URL params', async () => {
+    vi.mocked(publicAPI.makePayment).mockReturnValue(new Promise(() => {}))
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&phone=0712345678&email=guest@test.com']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Pay/i }).length).toBeGreaterThan(0)
     })
 
-    const modal = screen.getByText(/Opening Paystack Checkout/i).closest('.rounded-card')
-    expect(modal).toHaveClass('rounded-card')
-    expect(modal).toHaveClass('shadow-card')
+    fireEvent.click(screen.getAllByRole('button', { name: /Pay/i })[0])
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('identity-prompt-modal')).not.toBeInTheDocument()
+      expect(publicAPI.makePayment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: '0712345678',
+          email: 'guest@test.com',
+        })
+      )
+      expect(screen.getByText(/Opening Paystack Checkout/i)).toBeInTheDocument()
+    })
+  })
+
+  it('validates that phone and email are non-empty before allowing progression', async () => {
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Pay/i }).length).toBeGreaterThan(0)
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Pay/i })[0])
+
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-prompt-modal')).toBeInTheDocument()
+    })
+
+    // Try submitting without filling inputs
+    fireEvent.click(screen.getByRole('button', { name: /Continue to Paystack/i }))
+
+    expect(screen.getByText(/Phone number is required/i)).toBeInTheDocument()
+    expect(screen.getByText(/Email address is required/i)).toBeInTheDocument()
+    expect(publicAPI.makePayment).not.toHaveBeenCalled()
+  })
+
+  it('pre-populates phone from URL param if only phone is provided, requiring only email', async () => {
+    vi.mocked(publicAPI.makePayment).mockReturnValue(new Promise(() => {}))
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&phone=0712345678']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Pay/i }).length).toBeGreaterThan(0)
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Pay/i })[0])
+
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-prompt-modal')).toBeInTheDocument()
+    })
+
+    const phoneInput = screen.getByLabelText(/Phone Number/i) as HTMLInputElement
+    expect(phoneInput.value).toBe('0712345678')
+
+    const emailInput = screen.getByLabelText(/Email Address/i)
+    fireEvent.change(emailInput, { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /Continue to Paystack/i }))
+
+    await waitFor(() => {
+      expect(publicAPI.makePayment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: '0712345678',
+          email: 'user@example.com',
+        })
+      )
+    })
+  })
+
+  it('passes collected email and phone to Paystack popup setup replacing hardcoded value', async () => {
+    const mockSetup = vi.fn().mockReturnValue({ openIframe: vi.fn() })
+    ;(window as any).PaystackPop = { setup: mockSetup }
+
+    vi.mocked(publicAPI.makePayment).mockResolvedValue({
+      success: true,
+      data: {
+        reference: 'ref-paystack-123',
+        access_code: 'access-123',
+      },
+      reference: 'ref-paystack-123',
+      access_code: 'access-123',
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&phone=0712345678&email=guest@test.com']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Pay/i }).length).toBeGreaterThan(0)
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Pay/i })[0])
+
+    await waitFor(() => {
+      expect(mockSetup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'guest@test.com',
+          customer: expect.objectContaining({
+            email: 'guest@test.com',
+            phone: '0712345678',
+          }),
+        })
+      )
+    })
   })
 })
 

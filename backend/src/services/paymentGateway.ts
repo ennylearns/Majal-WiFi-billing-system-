@@ -179,7 +179,7 @@ export class PaystackGateway implements PaymentGateway {
   async verifyTransaction(reference: string): Promise<VerifyPaymentResult> {
     if (reference.startsWith('mock_ref_')) {
       return {
-        status: 'success',
+        status: 'pending',
         amount: 10000,
         reference
       };

@@ -4,13 +4,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] A phone + email collection form is shown before the Paystack popup for any guest whose contact details are not already in the URL params
-- [ ] If `phone` and `email` are present in URL query params, the upfront form is skipped and those values are used directly
-- [ ] The collected email is passed to the Paystack popup `customer.email` field, replacing the hardcoded value
-- [ ] The collected phone number is passed to the Paystack popup `customer.phone` field
-- [ ] Phone and email are included in the fulfillment payload sent to the backend when the payment settles
-- [ ] Backend stores phone and email on the session record on fulfillment
-- [ ] The form validates that phone and email are non-empty before allowing progression
-- [ ] `publicAPI.register` and `publicAPI.login` are marked `// TODO (future)` and have no UI entry point
+- [x] A phone + email collection form is shown before the Paystack popup for any guest whose contact details are not already in the URL params
+- [x] If `phone` and `email` are present in URL query params, the upfront form is skipped and those values are used directly
+- [x] The collected email is passed to the Paystack popup `customer.email` field, replacing the hardcoded value
+- [x] The collected phone number is passed to the Paystack popup `customer.phone` field
+- [x] Phone and email are included in the fulfillment payload sent to the backend when the payment settles
+- [x] Backend stores phone and email on the session record on fulfillment
+- [x] The form validates that phone and email are non-empty before allowing progression
+- [x] `publicAPI.register` and `publicAPI.login` are marked `// TODO (future)` and have no UI entry point

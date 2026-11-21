@@ -62,7 +62,10 @@ router.post(
 router.get('/status/:checkoutRequestId', async (req: Request, res: Response) => {
   try {
     const { checkoutRequestId } = req.params;
-    const result = await paymentService.checkStatus(checkoutRequestId);
+    const phone = req.query.phone as string | undefined;
+    const email = req.query.email as string | undefined;
+    const customerInfo = phone || email ? { phone, email } : undefined;
+    const result = await paymentService.checkStatus(checkoutRequestId, customerInfo);
 
     res.json({ success: true, data: result });
   } catch (error: any) {
@@ -71,6 +74,26 @@ router.get('/status/:checkoutRequestId', async (req: Request, res: Response) => 
     }
     console.error('Payment status check error:', error);
     res.status(500).json({ success: false, error: 'Failed to check payment status' });
+  }
+});
+
+// Direct payment fulfillment endpoint
+router.post('/fulfill', async (req: Request, res: Response) => {
+  try {
+    const { reference, paymentId, phone, email } = req.body;
+    const refOrId = reference || paymentId;
+    if (!refOrId) {
+      return res.status(400).json({ success: false, error: 'Payment reference or ID required' });
+    }
+    const customerInfo = phone || email ? { phone, email } : undefined;
+    const result = await paymentService.fulfillPayment(refOrId, undefined, customerInfo);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    if (error.message === 'Payment not found') {
+      return res.status(404).json({ success: false, error: 'Payment not found' });
+    }
+    console.error('Payment fulfillment error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Payment fulfillment failed' });
   }
 });
 

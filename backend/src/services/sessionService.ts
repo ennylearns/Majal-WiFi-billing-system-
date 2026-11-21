@@ -71,6 +71,8 @@ export interface StartTrialParams {
   routerId: string;
   macAddress: string;
   ipAddress?: string;
+  phone?: string;
+  email?: string;
 }
 
 export interface TrialStatusResult {
@@ -112,7 +114,7 @@ export class SessionService {
     this.mikrotikFactory = mikrotikFactory;
   }
 
-  async createSession(userId: string, planId: string, sessionToken: string): Promise<any> {
+  async createSession(userId: string, planId: string, sessionToken: string, phone?: string, email?: string): Promise<any> {
     try {
       const plan = await this.prisma.plan.findUnique({
         where: { id: planId },
@@ -130,12 +132,31 @@ export class SessionService {
       const endTime = new Date();
       endTime.setHours(endTime.getHours() + plan.duration);
 
+      let resolvedPhone = phone || null;
+      let resolvedEmail = email || null;
+      if ((!resolvedPhone || !resolvedEmail) && userId) {
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { phone: true, email: true },
+          });
+          if (user) {
+            resolvedPhone = resolvedPhone || user.phone || null;
+            resolvedEmail = resolvedEmail || user.email || null;
+          }
+        } catch {
+          // ignore lookup error
+        }
+      }
+
       const session = await this.prisma.session.create({
         data: {
           userId,
           planId,
           routerId: plan.router.id,
           sessionToken,
+          phone: resolvedPhone,
+          email: resolvedEmail,
           endTime,
           status: 'ACTIVE',
         },
@@ -238,7 +259,7 @@ export class SessionService {
   }
 
   async startTrialSession(params: StartTrialParams): Promise<{ session: any; message: string }> {
-    const { routerId, macAddress, ipAddress } = params;
+    const { routerId, macAddress, ipAddress, phone, email } = params;
     const normalizedMac = normalizeMac(macAddress);
 
     // Validate router
@@ -285,6 +306,8 @@ export class SessionService {
         routerId: router.id,
         macAddress: normalizedMac,
         ipAddress: ipAddress || null,
+        phone: phone || null,
+        email: email || null,
         sessionToken,
         startTime,
         endTime,
@@ -300,7 +323,7 @@ export class SessionService {
     };
   }
 
-  async upgradeTrialSession(sessionId: string, planId: string, userId?: string): Promise<any> {
+  async upgradeTrialSession(sessionId: string, planId: string, userId?: string, phone?: string, email?: string): Promise<any> {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
       include: { router: true },
@@ -356,6 +379,23 @@ export class SessionService {
     await mikrotik.updateUserProfile(session.sessionToken, profileName);
     await mikrotik.updateActiveUserRateLimit(session.sessionToken, speedLimit);
 
+    let resolvedPhone = phone || (session as any).phone || null;
+    let resolvedEmail = email || (session as any).email || null;
+    if ((!resolvedPhone || !resolvedEmail) && (userId || session.userId)) {
+      try {
+        const u = await this.prisma.user.findUnique({
+          where: { id: (userId || session.userId)! },
+          select: { phone: true, email: true },
+        });
+        if (u) {
+          resolvedPhone = resolvedPhone || u.phone || null;
+          resolvedEmail = resolvedEmail || u.email || null;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     // Update session record in DB
     const updatedSession = await this.prisma.session.update({
       where: { id: sessionId },
@@ -368,6 +408,8 @@ export class SessionService {
         startTime: upgradedAt,
         endTime,
         status: 'ACTIVE',
+        phone: resolvedPhone,
+        email: resolvedEmail,
       },
       include: {
         user: true,

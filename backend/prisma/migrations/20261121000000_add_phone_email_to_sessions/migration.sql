@@ -1,0 +1,1 @@
+-- AddColumn phone and email to sessions\nALTER TABLE sessions ADD COLUMN phone TEXT;\nALTER TABLE sessions ADD COLUMN email TEXT;
