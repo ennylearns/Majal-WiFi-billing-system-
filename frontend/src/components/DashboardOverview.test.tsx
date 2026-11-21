@@ -75,6 +75,86 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
     expect(screen.queryByText('Active Access Gateways')).not.toBeInTheDocument()
   })
 
+  it('renders a loading state while health fetch is in flight', async () => {
+    let resolveHealth!: (v: any) => void
+    vi.mocked(adminAPI.getHealth).mockReturnValueOnce(
+      new Promise(res => { resolveHealth = res })
+    )
+
+    render(
+      <MemoryRouter>
+        <DashboardOverview stats={mockStats} />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText('Loading infrastructure status…')).toBeInTheDocument()
+
+    resolveHealth({
+      postgres: { status: 'ok', message: 'Connected' },
+      paystack: { status: 'ok', message: 'Configured' },
+      wireguard: { status: 'ok', message: 'Interface active' },
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading infrastructure status…')).not.toBeInTheDocument()
+    })
+  })
+
+  it('renders error state for all services when health endpoint itself fails', async () => {
+    vi.mocked(adminAPI.getHealth).mockRejectedValueOnce(new Error('Network Error'))
+
+    render(
+      <MemoryRouter>
+        <DashboardOverview stats={mockStats} />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('PostgreSQL Database')).toBeInTheDocument()
+    })
+
+    const errorMessages = screen.getAllByText('Failed to fetch status')
+    expect(errorMessages.length).toBe(3)
+
+    const errorBadges = screen.getAllByText('Error')
+    expect(errorBadges).toHaveLength(3)
+  })
+
+  it('does not render KPI trend badges', () => {
+    vi.mocked(adminAPI.getHealth).mockResolvedValueOnce({
+      postgres: { status: 'ok', message: 'Connected' },
+      paystack: { status: 'ok', message: 'Configured' },
+      wireguard: { status: 'ok', message: 'Interface active' },
+    })
+
+    render(
+      <MemoryRouter>
+        <DashboardOverview stats={mockStats} />
+      </MemoryRouter>
+    )
+
+    expect(screen.queryByText('+12% this week')).not.toBeInTheDocument()
+    expect(screen.queryByText('+8% vs last month')).not.toBeInTheDocument()
+  })
+
+  it('does not render Export Log, Issue Voucher, or Filter buttons', () => {
+    vi.mocked(adminAPI.getHealth).mockResolvedValueOnce({
+      postgres: { status: 'ok', message: 'Connected' },
+      paystack: { status: 'ok', message: 'Configured' },
+      wireguard: { status: 'ok', message: 'Interface active' },
+    })
+
+    render(
+      <MemoryRouter>
+        <DashboardOverview stats={mockStats} />
+      </MemoryRouter>
+    )
+
+    expect(screen.queryByText('Export Log')).not.toBeInTheDocument()
+    expect(screen.queryByText('Issue Voucher')).not.toBeInTheDocument()
+    expect(screen.queryByText('Filter')).not.toBeInTheDocument()
+  })
+
   it('renders error status and message when a service check fails', async () => {
     vi.mocked(adminAPI.getHealth).mockResolvedValueOnce({
       postgres: { status: 'ok', message: 'Connected' },

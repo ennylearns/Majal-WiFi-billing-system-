@@ -123,17 +123,17 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
       title:    'Total Users',
       value:    stats.totalUsers.toLocaleString(),
       icon:     'group',
-      sub:      '+12% this week',
-      subIcon:  'arrow_upward',
-      subClass: 'text-status-success',
+      sub:      null,
+      subIcon:  null,
+      subClass: 'text-text-muted',
     },
     {
       title:    'Total Revenue',
       value:    formatCurrency(stats.totalRevenue),
       icon:     'payments',
-      sub:      '+8% vs last month',
-      subIcon:  'arrow_upward',
-      subClass: 'text-status-success',
+      sub:      null,
+      subIcon:  null,
+      subClass: 'text-text-muted',
     },
     {
       title:    'Active Sessions',
@@ -164,23 +164,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
             Hotspot operations, RADIUS session accounting, and gateway throughput.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-border-subtle bg-surface-card text-xs font-medium text-text-primary hover:bg-surface-canvas transition-colors"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[16px] text-text-muted">file_download</span>
-            Export Log
-          </button>
-          <button
-            onClick={() => navigate('/admin/users')}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded bg-[#0045A9] text-white text-xs font-medium hover:bg-[#00388a] transition-colors shadow-sm"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[16px]">add</span>
-            Issue Voucher
-          </button>
-        </div>
+
       </div>
 
       {/* ── KPI stat cards ────────────────────────────────────────────────── */}
@@ -343,10 +327,6 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
             <p className="text-[11px] text-text-muted">Real-time captive portal checkout events &amp; automated session provisioning.</p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-border-subtle text-xs font-medium text-text-primary hover:bg-surface-canvas transition-colors" type="button">
-              <span className="material-symbols-outlined text-[14px] text-text-muted">tune</span>
-              Filter
-            </button>
             <button
               onClick={() => navigate('/admin/payments')}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-surface-canvas border border-border-subtle text-xs font-medium text-text-primary hover:bg-surface-dim transition-colors"
