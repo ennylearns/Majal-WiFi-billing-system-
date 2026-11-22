@@ -2,21 +2,245 @@ import React, { useState, useEffect } from 'react'
 import { adminAPI } from '../services/api'
 import { formatDuration } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import type { Plan } from '../types'
+import type { Plan, Router } from '../types'
+
+export interface PlanModalProps {
+  isOpen?: boolean
+  plan?: Plan | null
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export const PlanModal: React.FC<PlanModalProps> = ({
+  isOpen = true,
+  plan = null,
+  onClose,
+  onSuccess,
+}) => {
+  const [routers, setRouters] = useState<Router[]>([])
+  const [loadingRouters, setLoadingRouters] = useState(true)
+  const [formData, setFormData] = useState({
+    name: plan?.name || '',
+    description: plan?.description || '',
+    price: plan?.price !== undefined ? plan.price.toString() : '',
+    duration: plan?.duration !== undefined ? plan.duration.toString() : '',
+    dataLimit: plan?.dataLimit || '',
+    speedLimit: plan?.speedLimit || '',
+    routerId: plan?.routerId || plan?.router?.id || '',
+  })
+
+  useEffect(() => {
+    fetchRouters()
+  }, [])
+
+  const fetchRouters = async () => {
+    setLoadingRouters(true)
+    try {
+      const response = await adminAPI.getRouters()
+      if (response.success && response.data) {
+        setRouters(response.data)
+      }
+    } catch (error) {
+      toast.error('Failed to load routers')
+    } finally {
+      setLoadingRouters(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.routerId) {
+      toast.error('Please select a router')
+      return
+    }
+
+    try {
+      const planData = {
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        duration: parseInt(formData.duration),
+        dataLimit: formData.dataLimit,
+        speedLimit: formData.speedLimit,
+        routerId: formData.routerId,
+      }
+
+      if (plan) {
+        await adminAPI.updatePlan(plan.id, planData)
+        toast.success('Plan updated successfully')
+      } else {
+        await adminAPI.createPlan(planData)
+        toast.success('Plan created successfully')
+      }
+
+      onClose()
+      onSuccess()
+    } catch (error) {
+      toast.error('Failed to save plan')
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="bg-surface-card rounded-card w-full max-w-lg shadow-overlay border border-border-subtle overflow-hidden">
+        {/* Modal header */}
+        <div className="px-6 py-4 flex items-center justify-between border-b border-border-subtle">
+          <h2 className="font-bold text-base text-text-primary">
+            {plan ? 'Edit Internet Plan' : 'Create Internet Plan'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-control text-text-muted hover:text-text-primary hover:bg-surface-canvas transition-colors"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        {/* Modal body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+              Plan Name
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              placeholder="e.g., Premium 24 Hours"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+              Description
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full px-3 py-2 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              rows={2}
+              placeholder="Brief description of the plan"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                Price (KES)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-placeholder font-mono text-xs">KES</span>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  className="w-full h-9 pl-11 pr-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                  placeholder="100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                Duration (hours)
+              </label>
+              <input
+                type="number"
+                required
+                min="1"
+                value={formData.duration}
+                onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                placeholder="24"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                Data Limit
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.dataLimit}
+                onChange={(e) => setFormData({ ...formData, dataLimit: e.target.value })}
+                className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                placeholder="10GB"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                Speed Limit
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.speedLimit}
+                onChange={(e) => setFormData({ ...formData, speedLimit: e.target.value })}
+                className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                placeholder="20Mbps"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="router" className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+              Router
+            </label>
+            <select
+              id="router"
+              required
+              value={formData.routerId}
+              onChange={(e) => setFormData({ ...formData, routerId: e.target.value })}
+              className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+            >
+              <option value="">Select a router</option>
+              {routers.map((router) => (
+                <option key={router.id} value={router.id}>
+                  {router.name} — {router.location}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-border-subtle">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3.5 py-1.5 rounded-control border border-border-subtle text-text-secondary hover:bg-slate-50 text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loadingRouters}
+              className="h-10 px-4 bg-primary hover:bg-primary-hover text-white font-medium text-sm rounded-control transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {plan ? 'Update Plan' : 'Save Plan'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 const PlansManagement: React.FC = () => {
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    price: '',
-    duration: '',
-    dataLimit: '',
-    speedLimit: ''
-  })
 
   useEffect(() => {
     fetchPlans()
@@ -37,56 +261,12 @@ const PlansManagement: React.FC = () => {
 
   const handleCreatePlan = () => {
     setEditingPlan(null)
-    setFormData({
-      name: '',
-      description: '',
-      price: '',
-      duration: '',
-      dataLimit: '',
-      speedLimit: ''
-    })
     setShowModal(true)
   }
 
   const handleEditPlan = (plan: Plan) => {
     setEditingPlan(plan)
-    setFormData({
-      name: plan.name,
-      description: plan.description || '',
-      price: plan.price.toString(),
-      duration: plan.duration.toString(),
-      dataLimit: plan.dataLimit,
-      speedLimit: plan.speedLimit
-    })
     setShowModal(true)
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    try {
-      const planData = {
-        name: formData.name,
-        description: formData.description,
-        price: parseFloat(formData.price),
-        duration: parseInt(formData.duration),
-        dataLimit: formData.dataLimit,
-        speedLimit: formData.speedLimit
-      }
-
-      if (editingPlan) {
-        await adminAPI.updatePlan(editingPlan.id, planData)
-        toast.success('Plan updated successfully')
-      } else {
-        await adminAPI.createPlan(planData)
-        toast.success('Plan created successfully')
-      }
-
-      setShowModal(false)
-      fetchPlans()
-    } catch (error) {
-      toast.error('Failed to save plan')
-    }
   }
 
   const handleDeletePlan = async (planId: string) => {
@@ -248,134 +428,11 @@ const PlansManagement: React.FC = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-surface-card rounded-card w-full max-w-lg shadow-overlay border border-border-subtle overflow-hidden">
-            {/* Modal header */}
-            <div className="px-6 py-4 flex items-center justify-between border-b border-border-subtle">
-              <h2 className="font-bold text-base text-text-primary">
-                {editingPlan ? 'Edit Internet Plan' : 'Create Internet Plan'}
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-1 rounded-control text-text-muted hover:text-text-primary hover:bg-surface-canvas transition-colors"
-              >
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
-
-            {/* Modal body */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                  Plan Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                  placeholder="e.g., Premium 24 Hours"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                  rows={2}
-                  placeholder="Brief description of the plan"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                    Price (KES)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-placeholder font-mono text-xs">KES</span>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      className="w-full h-9 pl-11 pr-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                      placeholder="100"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                    Duration (hours)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    value={formData.duration}
-                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                    className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                    placeholder="24"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                    Data Limit
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.dataLimit}
-                    onChange={(e) => setFormData({ ...formData, dataLimit: e.target.value })}
-                    className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                    placeholder="10GB"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                    Speed Limit
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.speedLimit}
-                    onChange={(e) => setFormData({ ...formData, speedLimit: e.target.value })}
-                    className="w-full h-9 px-3 rounded-control border border-border-subtle bg-surface-canvas text-sm text-text-primary placeholder:text-text-placeholder focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                    placeholder="20Mbps"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-border-subtle">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-3.5 py-1.5 rounded-control border border-border-subtle text-text-secondary hover:bg-slate-50 text-sm font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="h-10 px-4 bg-primary hover:bg-primary-hover text-white font-medium text-sm rounded-control transition-colors"
-                >
-                  {editingPlan ? 'Update Plan' : 'Save Plan'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <PlanModal
+          plan={editingPlan}
+          onClose={() => setShowModal(false)}
+          onSuccess={fetchPlans}
+        />
       )}
     </div>
   )

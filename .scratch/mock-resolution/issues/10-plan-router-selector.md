@@ -4,14 +4,14 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Plan modal fetches the router list via `adminAPI.getRouters()` on mount
-- [ ] A required `<select>` field labelled "Router" is rendered in place of the "Advanced Settings" section
-- [ ] Each option shows `{router.name} — {router.location}`
-- [ ] The submit button is disabled while the router list is loading
-- [ ] `routerId` is included in the `formData` initial state (empty string for create, existing value for edit)
-- [ ] `routerId` is sent in the payload for both `adminAPI.createPlan` and `adminAPI.updatePlan`
-- [ ] The form cannot be submitted with no router selected (native `required` constraint or equivalent validation)
-- [ ] The edit modal pre-selects the plan's current router when opened
-- [ ] "Advanced Settings" section and any related state are removed
+- [x] Plan modal fetches the router list via `adminAPI.getRouters()` on mount
+- [x] A required `<select>` field labelled "Router" is rendered in place of the "Advanced Settings" section
+- [x] Each option shows `{router.name} — {router.location}`
+- [x] The submit button is disabled while the router list is loading
+- [x] `routerId` is included in the `formData` initial state (empty string for create, existing value for edit)
+- [x] `routerId` is sent in the payload for both `adminAPI.createPlan` and `adminAPI.updatePlan`
+- [x] The form cannot be submitted with no router selected (native `required` constraint or equivalent validation)
+- [x] The edit modal pre-selects the plan's current router when opened
+- [x] "Advanced Settings" section and any related state are removed
