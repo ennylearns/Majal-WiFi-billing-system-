@@ -131,10 +131,10 @@ export const PlanModal: React.FC<PlanModalProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                Price (KES)
+                Price (NGN)
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-placeholder font-mono text-xs">KES</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-placeholder font-mono text-xs">₦</span>
                 <input
                   type="number"
                   required
@@ -362,7 +362,7 @@ const PlansManagement: React.FC = () => {
               {/* Price section */}
               <div className="px-5 py-4">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-sm text-text-muted">KES</span>
+                  <span className="text-sm text-text-muted">₦</span>
                   <span className="text-[2rem] font-bold tabular-nums text-text-primary leading-none">
                     {plan.price.toLocaleString()}
                   </span>

@@ -216,7 +216,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
                 href: '/admin/plans',
                 icon: 'add_card',
                 label: 'Create New Plan',
-                desc: 'Configure bandwidth speed limits, session durations, and KES tariffs.',
+                desc: 'Configure bandwidth speed limits, session durations, and NGN tariffs.',
               },
               {
                 href: '/admin/routers',
@@ -344,7 +344,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
             <thead>
               <tr className="bg-surface-canvas border-b border-border-subtle">
                 {(
-                  ['Identifier / Phone', 'Plan', 'Reference', 'Amount (KES)', 'Timestamp', 'Status'] as const
+                  ['Identifier / Phone', 'Plan', 'Reference', 'Amount (NGN)', 'Timestamp', 'Status'] as const
                 ).map((col, ci) => (
                   <th
                     key={col}

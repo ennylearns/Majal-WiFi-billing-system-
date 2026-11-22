@@ -20,7 +20,7 @@ class SMSService {
       const result = await this.sms.send({
         to: [formattedPhone],
         message: message,
-        from: 'COLLOSPOT'
+        from: 'MAJAL ISP'
       });
 
       console.log('SMS sent successfully:', result);
@@ -32,33 +32,33 @@ class SMSService {
   }
 
   async sendPaymentConfirmation(phone: string, amount: number, receiptNumber: string): Promise<boolean> {
-    const message = `Payment confirmed! KES ${amount} received. Receipt: ${receiptNumber}. Your internet access is now active. - COLLOSPOT`;
+    const message = `Payment confirmed! NGN ${amount} received. Receipt: ${receiptNumber}. Your internet access is now active. - MAJAL ISP`;
     return await this.sendSMS(phone, message);
   }
 
   async sendSessionExpiry(phone: string, planName: string): Promise<boolean> {
-    const message = `Your ${planName} internet session has expired. Visit our portal to purchase a new plan and continue browsing. - COLLOSPOT`;
+    const message = `Your ${planName} internet session has expired. Visit our portal to purchase a new plan and continue browsing. - MAJAL ISP`;
     return await this.sendSMS(phone, message);
   }
 
   async sendWelcomeMessage(phone: string, firstName?: string): Promise<boolean> {
     const name = firstName ? ` ${firstName}` : '';
-    const message = `Welcome${name} to COLLOSPOT! Your account has been created successfully. Connect to our WiFi and enjoy high-speed internet. - COLLOSPOT`;
+    const message = `Welcome${name} to MAJAL ISP! Your account has been created successfully. Connect to our WiFi and enjoy high-speed internet. - MAJAL ISP`;
     return await this.sendSMS(phone, message);
   }
 
   async sendOTP(phone: string, otp: string): Promise<boolean> {
-    const message = `Your COLLOSPOT verification code is: ${otp}. This code expires in 10 minutes. Do not share this code with anyone.`;
+    const message = `Your MAJAL ISP verification code is: ${otp}. This code expires in 10 minutes. Do not share this code with anyone.`;
     return await this.sendSMS(phone, message);
   }
 
   async sendLowBalanceAlert(phone: string, remainingTime: string): Promise<boolean> {
-    const message = `Your internet session expires in ${remainingTime}. Top up now to avoid disconnection. Visit our portal to purchase more data. - COLLOSPOT`;
+    const message = `Your internet session expires in ${remainingTime}. Top up now to avoid disconnection. Visit our portal to purchase more data. - MAJAL ISP`;
     return await this.sendSMS(phone, message);
   }
 
   async sendPasswordReset(phone: string, resetCode: string): Promise<boolean> {
-    const message = `Your COLLOSPOT password reset code is: ${resetCode}. Use this code to reset your password. Code expires in 15 minutes.`;
+    const message = `Your MAJAL ISP password reset code is: ${resetCode}. Use this code to reset your password. Code expires in 15 minutes.`;
     return await this.sendSMS(phone, message);
   }
 

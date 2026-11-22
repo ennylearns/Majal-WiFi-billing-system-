@@ -1,4 +1,4 @@
-# 🚀 COLLOSPOT Quick Start Guide
+# 🚀 MAJAL ISP Quick Start Guide
 
 ## ✅ Dependencies Installed Successfully!
 
@@ -20,7 +20,7 @@ Visit: http://localhost:3000
 
 ### 1. Install PostgreSQL
 - Download from: https://www.postgresql.org/download/
-- Create database: `collospot_db`
+- Create database: `majalisp_db`
 - Update `backend/.env` with your database credentials
 
 ### 2. Setup Database
@@ -45,7 +45,7 @@ node start-dev.js
 
 ## 🔑 Default Admin Login
 
-- **Email**: admin@collospot.com
+- **Email**: admin@majalisp.com
 - **Password**: admin123
 
 ## 📡 Router Management

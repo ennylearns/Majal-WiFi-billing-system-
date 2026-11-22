@@ -69,7 +69,7 @@ cron.schedule('*/5 * * * *', () => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 COLLOSPOT Server running on port ${PORT}`);
+  console.log(`🚀 MAJAL ISP Server running on port ${PORT}`);
   console.log(`📱 Environment: ${process.env.NODE_ENV}`);
 });
 

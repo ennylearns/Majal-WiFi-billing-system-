@@ -1,7 +1,7 @@
 {
-  "name": "collospot-frontend",
+  "name": "majalisp-frontend",
   "version": "1.0.0",
-  "description": "COLLOSPOT WiFi Billing System Frontend",
+  "description": "MAJAL ISP WiFi Billing System Frontend",
   "private": true,
   "type": "module",
   "dependencies": {

@@ -1,7 +1,7 @@
 {
-  "name": "collospot-backend",
+  "name": "majalisp-backend",
   "version": "1.0.0",
-  "description": "COLLOSPOT WiFi Billing System Backend",
+  "description": "MAJAL ISP WiFi Billing System Backend",
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon src/server.ts",

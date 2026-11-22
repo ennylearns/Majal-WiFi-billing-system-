@@ -116,7 +116,7 @@
 </div>
 <div class="mb-6">
 <div class="flex items-baseline gap-1.5">
-<span class="text-3xl font-bold text-text-primary tracking-tight">KES 50</span>
+<span class="text-3xl font-bold text-text-primary tracking-tight">NGN 50</span>
 <span class="text-sm text-text-muted">/ 1 hr</span>
 </div>
 </div>
@@ -137,7 +137,7 @@
 </dl>
 </div>
 <button class="w-full h-10 rounded-md border border-border-subtle hover:bg-slate-50 text-text-primary font-medium text-sm flex items-center justify-center transition-colors" onclick="openCheckout('1 Hour Pass', 50, '15 Mbps')">
-            Pay KES 50
+            Pay NGN 50
           </button>
 </div>
 <!-- Plan 2: 24 Hours Unlimited (Recommended) -->
@@ -149,7 +149,7 @@
 </div>
 <div class="mb-6">
 <div class="flex items-baseline gap-1.5">
-<span class="text-3xl font-bold text-text-primary tracking-tight">KES 150</span>
+<span class="text-3xl font-bold text-text-primary tracking-tight">NGN 150</span>
 <span class="text-sm text-text-muted">/ 24 hrs</span>
 </div>
 </div>
@@ -170,7 +170,7 @@
 </dl>
 </div>
 <button class="w-full h-10 rounded-md bg-primary hover:bg-primary-hover text-white font-medium text-sm flex items-center justify-center transition-colors shadow-sm" onclick="openCheckout('24 Hours Unlimited', 150, '25 Mbps')">
-            Pay KES 150
+            Pay NGN 150
           </button>
 </div>
 <!-- Plan 3: Weekly Heavy -->
@@ -182,7 +182,7 @@
 </div>
 <div class="mb-6">
 <div class="flex items-baseline gap-1.5">
-<span class="text-3xl font-bold text-text-primary tracking-tight">KES 750</span>
+<span class="text-3xl font-bold text-text-primary tracking-tight">NGN 750</span>
 <span class="text-sm text-text-muted">/ 7 days</span>
 </div>
 </div>
@@ -203,7 +203,7 @@
 </dl>
 </div>
 <button class="w-full h-10 rounded-md border border-border-subtle hover:bg-slate-50 text-text-primary font-medium text-sm flex items-center justify-center transition-colors" onclick="openCheckout('Weekly Heavy', 750, '35 Mbps')">
-            Pay KES 750
+            Pay NGN 750
           </button>
 </div>
 </div>
@@ -258,7 +258,7 @@
 <div>
 <span class="text-xs font-semibold text-primary uppercase tracking-wider">Checkout</span>
 <h4 class="text-lg font-bold text-text-primary mt-0.5" id="modal-plan-title">24 Hours Unlimited</h4>
-<p class="text-xs font-mono text-text-muted" id="modal-plan-price">KES 150 • 25 Mbps</p>
+<p class="text-xs font-mono text-text-muted" id="modal-plan-price">NGN 150 • 25 Mbps</p>
 </div>
 <div class="space-y-3.5">
 <div>
@@ -349,7 +349,7 @@
 
     window.openCheckout = function(title, price, speed) {
       if (planTitle) planTitle.innerText = title;
-      if (planPrice) planPrice.innerText = `KES ${price} • ${speed}`;
+      if (planPrice) planPrice.innerText = `NGN ${price} • ${speed}`;
       
       stageInput.classList.remove('hidden');
       stageProcessing.classList.add('hidden');

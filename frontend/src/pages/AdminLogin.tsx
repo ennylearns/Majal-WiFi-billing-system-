@@ -98,7 +98,7 @@ const AdminLogin: React.FC = () => {
                     ? 'border-status-danger focus:ring-status-danger/[0.12]'
                     : 'border-border-subtle focus:border-primary focus:ring-primary/[0.12]'
                 }`}
-                placeholder="admin@collospot.com"
+                placeholder="admin@majalisp.com"
               />
             </div>
 
@@ -176,7 +176,7 @@ const AdminLogin: React.FC = () => {
 
           <div className="mt-4 text-center">
             <p className="text-xs text-text-muted">
-              Default credentials: admin@collospot.com / admin123
+              Default credentials: admin@majalisp.com / admin123
             </p>
           </div>
         </div>

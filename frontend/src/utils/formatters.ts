@@ -1,8 +1,8 @@
-// Currency formatter for Kenyan Shillings
+// Currency formatter for Nigerian Naira
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-KE', {
+  return new Intl.NumberFormat('en-NG', {
     style: 'currency',
-    currency: 'KES',
+    currency: 'NGN',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount)
@@ -44,10 +44,10 @@ export const formatPhoneNumber = (phone: string): string => {
   // Remove any non-digit characters
   const cleaned = phone.replace(/\D/g, '')
   
-  // Handle Kenyan phone numbers
-  if (cleaned.startsWith('254')) {
+  // Handle Nigerian phone numbers
+  if (cleaned.startsWith('234')) {
     const number = cleaned.slice(3)
-    return `+254 ${number.slice(0, 3)} ${number.slice(3, 6)} ${number.slice(6)}`
+    return `+234 ${number.slice(0, 3)} ${number.slice(3, 6)} ${number.slice(6)}`
   } else if (cleaned.startsWith('0')) {
     const number = cleaned.slice(1)
     return `0${number.slice(0, 3)} ${number.slice(3, 6)} ${number.slice(6)}`
@@ -58,7 +58,7 @@ export const formatPhoneNumber = (phone: string): string => {
 
 // Format date to local string
 export const formatDate = (date: string | Date): string => {
-  return new Date(date).toLocaleDateString('en-KE', {
+  return new Date(date).toLocaleDateString('en-NG', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -124,16 +124,16 @@ export const generateSessionToken = (): string => {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
 }
 
-// Validate Kenyan phone number
-export const isValidKenyanPhone = (phone: string): boolean => {
+// Validate Nigerian phone number
+export const isValidNigerianPhone = (phone: string): boolean => {
   const cleaned = phone.replace(/\D/g, '')
   
-  // Check if it's a valid Kenyan number
-  if (cleaned.startsWith('254') && cleaned.length === 12) {
+  // Check if it's a valid Nigerian number
+  if (cleaned.startsWith('234') && cleaned.length === 13) {
     return true
-  } else if (cleaned.startsWith('0') && cleaned.length === 10) {
+  } else if (cleaned.startsWith('0') && cleaned.length === 11) {
     return true
-  } else if (cleaned.length === 9) {
+  } else if (cleaned.length === 10) {
     // Assume it's missing the country code
     return true
   }

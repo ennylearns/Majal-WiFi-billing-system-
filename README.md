@@ -1,4 +1,4 @@
-# DenisTec - Smart WiFi Billing System
+# MAJAL ISP - Smart WiFi Billing System
 
 **"Connect. Pay. Browse — Seamlessly."**
 
@@ -126,7 +126,7 @@ The admin dashboard is fully responsive and optimized for:
 #### Backend (.env)
 ```env
 # Database
-DATABASE_URL="postgresql://username:password@localhost:5432/collospot_db"
+DATABASE_URL="postgresql://username:password@localhost:5432/majalisp_db"
 
 # JWT
 JWT_SECRET="your-super-secret-jwt-key-here"
@@ -151,7 +151,7 @@ AFRICASTALKING_API_KEY="your-africastalking-api-key"
 ```
 
 ### Default Admin Credentials
-- **Email**: admin@collospot.com
+- **Email**: admin@majalisp.com
 - **Password**: admin123
 
 ## 💰 Payment Plans
@@ -160,11 +160,11 @@ The system comes with pre-configured plans:
 
 | Plan | Duration | Price | Data Limit | Speed |
 |------|----------|-------|------------|-------|
-| Basic 1 Hour | 1 hour | KES 20 | 500MB | 5Mbps |
-| Standard 6 Hours | 6 hours | KES 100 | 2GB | 10Mbps |
-| Premium 24 Hours | 24 hours | KES 300 | 10GB | 20Mbps |
-| Weekly Package | 7 days | KES 1,500 | 50GB | 25Mbps |
-| Monthly Unlimited | 30 days | KES 5,000 | Unlimited | 50Mbps |
+| Basic 1 Hour | 1 hour | NGN 20 | 500MB | 5Mbps |
+| Standard 6 Hours | 6 hours | NGN 100 | 2GB | 10Mbps |
+| Premium 24 Hours | 24 hours | NGN 300 | 10GB | 20Mbps |
+| Weekly Package | 7 days | NGN 1,500 | 50GB | 25Mbps |
+| Monthly Unlimited | 30 days | NGN 5,000 | Unlimited | 50Mbps |
 
 ## 🔌 API Endpoints
 
@@ -332,7 +332,7 @@ For support or inquiries:
 
 ---
 
-- Empowering Kenya's digital connectivity, one WiFi connection at a time. 🇰🇪
+- Empowering Nigeria's digital connectivity, one WiFi connection at a time. 🇰🇪
 
 ---
 Made with ❤️ by **Mwaki Denis**

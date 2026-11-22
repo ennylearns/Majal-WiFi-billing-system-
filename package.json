@@ -1,7 +1,7 @@
 {
-  "name": "collospot-wifi-billing-system",
+  "name": "majalisp-wifi-billing-system",
   "version": "1.0.0",
-  "description": "COLLOSPOT - Smart WiFi Billing System for Kenya",
+  "description": "MAJAL ISP - Smart WiFi Billing System",
   "main": "index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -24,14 +24,14 @@
     "billing",
     "paystack",
     "mikrotik",
-    "kenya",
+    "nigeria",
     "hotspot",
     "captive-portal",
     "react",
     "nodejs",
     "postgresql"
   ],
-  "author": "COLLOSPOT Team",
+  "author": "MAJAL ISP Team",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"

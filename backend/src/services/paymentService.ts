@@ -138,7 +138,7 @@ export class PaymentService {
     const gatewayEmail =
       email ||
       user.email ||
-      `${resolvedPhone.replace(/\D/g, '')}@guest.collospot.com`;
+      `${resolvedPhone.replace(/\D/g, '')}@guest.majalisp.com`;
 
     const normalizedMac = macAddress && isValidMac(macAddress) ? normalizeMac(macAddress) : undefined;
 

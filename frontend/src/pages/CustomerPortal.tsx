@@ -251,7 +251,7 @@ const CustomerPortal: React.FC = () => {
   ) => {
     const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || ''
     const PaystackClass = (window as any).PaystackPop
-    const customerEmail = email || guestEmail || paramEmail || 'customer@collospot.com'
+    const customerEmail = email || guestEmail || paramEmail || 'customer@majalisp.com'
     const customerPhone = phone || guestPhone || paramPhone || ''
 
     const handleSuccess = (transaction: any) => {

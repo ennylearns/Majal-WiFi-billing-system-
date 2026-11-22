@@ -1,6 +1,6 @@
-# COLLOSPOT Deployment Guide
+# MAJAL ISP Deployment Guide
 
-This guide covers different deployment options for the COLLOSPOT WiFi Billing System.
+This guide covers different deployment options for the MAJAL ISP WiFi Billing System.
 
 ## 🚀 Quick Deployment with Docker
 
@@ -84,9 +84,9 @@ sudo npm install -g pm2
 sudo -u postgres psql
 
 # Create database and user
-CREATE DATABASE collospot_db;
-CREATE USER collospot WITH ENCRYPTED PASSWORD 'your-secure-password';
-GRANT ALL PRIVILEGES ON DATABASE collospot_db TO collospot;
+CREATE DATABASE majalisp_db;
+CREATE USER majalisp WITH ENCRYPTED PASSWORD 'your-secure-password';
+GRANT ALL PRIVILEGES ON DATABASE majalisp_db TO majalisp;
 \q
 ```
 
@@ -140,8 +140,8 @@ When routers are added in the Admin Dashboard, the backend dynamically registers
 ### 4. Application Deployment
 ```bash
 # Clone repository
-git clone <repository-url> /var/www/collospot
-cd /var/www/collospot
+git clone <repository-url> /var/www/majalisp
+cd /var/www/majalisp
 
 # Backend setup
 cd backend
@@ -164,9 +164,9 @@ Create `ecosystem.config.js`:
 ```javascript
 module.exports = {
   apps: [{
-    name: 'collospot-backend',
+    name: 'majalisp-backend',
     script: 'dist/server.js',
-    cwd: '/var/www/collospot/backend',
+    cwd: '/var/www/majalisp/backend',
     instances: 'max',
     exec_mode: 'cluster',
     env: {
@@ -185,7 +185,7 @@ pm2 startup
 ```
 
 ### 6. Nginx Configuration
-Create `/etc/nginx/sites-available/collospot`:
+Create `/etc/nginx/sites-available/majalisp`:
 ```nginx
 server {
     listen 80;
@@ -202,7 +202,7 @@ server {
 
     # Frontend
     location / {
-        root /var/www/collospot/frontend/dist;
+        root /var/www/majalisp/frontend/dist;
         try_files $uri $uri/ /index.html;
     }
 
@@ -223,7 +223,7 @@ server {
 
 Enable site:
 ```bash
-sudo ln -s /etc/nginx/sites-available/collospot /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/majalisp /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -364,7 +364,7 @@ curl -X POST https://yourdomain.com/api/public/payment \
 ### 1. Log Management
 ```bash
 # View backend logs
-pm2 logs collospot-backend
+pm2 logs majalisp-backend
 
 # View Nginx logs
 sudo tail -f /var/log/nginx/access.log
@@ -376,17 +376,17 @@ sudo tail -f /var/log/nginx/error.log
 # Create backup script
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
-pg_dump -U collospot -h localhost collospot_db > /backups/collospot_$DATE.sql
+pg_dump -U majalisp -h localhost majalisp_db > /backups/majalisp_$DATE.sql
 ```
 
 ### 3. System Updates
 ```bash
 # Update application
-cd /var/www/collospot
+cd /var/www/majalisp
 git pull origin main
 cd backend && npm install && npm run build
 cd ../frontend && npm install && npm run build
-pm2 restart collospot-backend
+pm2 restart majalisp-backend
 ```
 
 ## 🔒 Security Checklist
@@ -406,7 +406,7 @@ pm2 restart collospot-backend
 
 1. **502 Bad Gateway**
    - Check if backend is running: `pm2 status`
-   - Check backend logs: `pm2 logs collospot-backend`
+   - Check backend logs: `pm2 logs majalisp-backend`
    - Verify port 5000 is not blocked
 
 2. **Database Connection Error**
@@ -453,7 +453,7 @@ pm2 restart collospot-backend
 ## 📞 Support
 
 For deployment assistance:
-- **Email**: support@collospot.com
+- **Email**: support@majalisp.com
 - **Documentation**: Check README.md
 - **Issues**: Create GitHub issue
 

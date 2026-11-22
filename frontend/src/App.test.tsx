@@ -57,7 +57,7 @@ describe('Admin Login Navigation Loop', () => {
         user: {
           id: 'user-1',
           phone: '1234567890',
-          email: 'admin@collospot.com',
+          email: 'admin@majalisp.com',
           firstName: 'Admin',
           lastName: 'User',
           role: 'ADMIN',
@@ -89,7 +89,7 @@ describe('Admin Login Navigation Loop', () => {
     const passwordInput = screen.getByLabelText(/password/i)
     const submitButton = screen.getByRole('button', { name: /sign in/i })
 
-    fireEvent.change(emailInput, { target: { value: 'admin@collospot.com' } })
+    fireEvent.change(emailInput, { target: { value: 'admin@majalisp.com' } })
     fireEvent.change(passwordInput, { target: { value: 'admin123' } })
     fireEvent.click(submitButton)
 
@@ -115,7 +115,7 @@ describe('Admin Login Navigation Loop', () => {
     store['auth_token'] = 'existing-token'
     store['user'] = JSON.stringify({
       id: 'user-1',
-      email: 'admin@collospot.com',
+      email: 'admin@majalisp.com',
       role: 'ADMIN',
       firstName: 'Admin',
     })
