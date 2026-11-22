@@ -1,5 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 
+// Ensure BigInt serialization does not fail across JSON responses
+(BigInt.prototype as any).toJSON = function () {
+  return Number(this);
+};
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };

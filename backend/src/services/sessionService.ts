@@ -504,7 +504,7 @@ export class SessionService {
 
   async getUserActiveSessions(userId: string): Promise<any[]> {
     try {
-      return await this.prisma.session.findMany({
+      const sessions = await this.prisma.session.findMany({
         where: {
           userId,
           status: 'ACTIVE',
@@ -519,6 +519,10 @@ export class SessionService {
           startTime: 'desc',
         },
       });
+      return sessions.map((s: any) => ({
+        ...s,
+        dataUsed: Number(s.dataUsed),
+      }));
     } catch (error) {
       console.error('Error getting user sessions:', error);
       return [];

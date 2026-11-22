@@ -247,4 +247,27 @@ describe('Admin User Action Endpoints - Integration Tests', () => {
     assert.ok(macs.includes('aa:bb:cc:dd:ee:02'));
     assert.ok(macs.includes('aa:bb:cc:dd:ee:03'));
   });
+
+  // Users list test with active session (reproduces 500 error on /api/admin/users)
+  test('GET /api/admin/users?page=1&limit=10 returns 200 and user list when user has active session', async () => {
+    // Create an active session with BigInt dataUsed for targetUser
+    await prisma.session.create({
+      data: {
+        userId: targetUserId,
+        sessionToken: `token_active_for_get_users_${Date.now()}`,
+        status: 'ACTIVE',
+        dataUsed: BigInt(512),
+        macAddress: 'aa:bb:cc:dd:ee:99',
+      },
+    });
+
+    const res = await fetch(`${baseUrl}/users?page=1&limit=10`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(res.status, 200, `Expected 200 but got ${res.status}`);
+    const body = (await res.json()) as any;
+    assert.equal(body.success, true);
+    assert.ok(Array.isArray(body.data.users));
+    assert.ok(body.data.users.length > 0);
+  });
 });

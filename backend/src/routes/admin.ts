@@ -111,10 +111,18 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
       prisma.user.count({ where })
     ]);
 
+    const formattedUsers = users.map(user => ({
+      ...user,
+      sessions: user.sessions.map(session => ({
+        ...session,
+        dataUsed: Number(session.dataUsed)
+      }))
+    }));
+
     res.json({
       success: true,
       data: {
-        users,
+        users: formattedUsers,
         pagination: {
           page: Number(page),
           limit: Number(limit),
@@ -124,6 +132,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
       }
     });
   } catch (error) {
+    console.error('Failed to get users:', error);
     res.status(500).json({ success: false, error: 'Failed to get users' });
   }
 });
@@ -469,10 +478,15 @@ router.get('/sessions', async (req: AuthRequest, res: Response) => {
       prisma.session.count({ where })
     ]);
 
+    const formattedSessions = sessions.map(session => ({
+      ...session,
+      dataUsed: Number(session.dataUsed)
+    }));
+
     res.json({
       success: true,
       data: {
-        sessions,
+        sessions: formattedSessions,
         pagination: {
           page: Number(page),
           limit: Number(limit),
@@ -482,6 +496,7 @@ router.get('/sessions', async (req: AuthRequest, res: Response) => {
       }
     });
   } catch (error) {
+    console.error('Failed to get sessions:', error);
     res.status(500).json({ success: false, error: 'Failed to get sessions' });
   }
 });
