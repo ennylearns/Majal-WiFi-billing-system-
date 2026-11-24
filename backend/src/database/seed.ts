@@ -4,82 +4,29 @@ import { prisma } from './db';
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Create admin user
-  const hashedPassword = await bcrypt.hash('admin123', 10);
-  
+  const email = 'ennylearns@gmail.com';
+  const rawPassword = 'seniola';
+  const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@majalisp.com' },
-    update: {},
+    where: { email },
+    update: {
+      password: hashedPassword,
+      role: 'ADMIN',
+      isActive: true,
+    },
     create: {
-      email: 'admin@majalisp.com',
-      phone: '+254700000000',
+      email,
+      phone: '+2340000000000',
       password: hashedPassword,
       firstName: 'Admin',
       lastName: 'User',
-      role: 'ADMIN'
-    }
+      role: 'ADMIN',
+      isActive: true,
+    },
   });
 
-  console.log('✅ Admin user created:', admin.email);
-
-  // Create default plans
-  const plans = [
-    {
-      name: 'Basic 1 Hour',
-      description: 'Perfect for quick browsing and social media',
-      price: 20,
-      duration: 1,
-      dataLimit: '500MB',
-      speedLimit: '5Mbps'
-    },
-    {
-      name: 'Standard 6 Hours',
-      description: 'Great for work and entertainment',
-      price: 100,
-      duration: 6,
-      dataLimit: '2GB',
-      speedLimit: '10Mbps'
-    },
-    {
-      name: 'Premium 24 Hours',
-      description: 'Full day unlimited access',
-      price: 300,
-      duration: 24,
-      dataLimit: '10GB',
-      speedLimit: '20Mbps'
-    },
-    {
-      name: 'Weekly Package',
-      description: 'Perfect for extended stays',
-      price: 1500,
-      duration: 168, // 7 days
-      dataLimit: '50GB',
-      speedLimit: '25Mbps'
-    },
-    {
-      name: 'Monthly Unlimited',
-      description: 'Ultimate internet freedom',
-      price: 5000,
-      duration: 720, // 30 days
-      dataLimit: 'Unlimited',
-      speedLimit: '50Mbps'
-    }
-  ];
-
-  // Delete existing plans and create new ones
-  await prisma.plan.deleteMany({});
-  
-  const createdPlans = await prisma.plan.createMany({
-    data: plans
-  });
-  
-  console.log(`✅ Created ${createdPlans.count} plans`);
-  
-  const allPlans = await prisma.plan.findMany();
-  allPlans.forEach(plan => {
-    console.log('✅ Plan created:', plan.name);
-  });
-
+  console.log('✅ Admin user ready:', admin.email);
   console.log('🎉 Database seeded successfully!');
 }
 
