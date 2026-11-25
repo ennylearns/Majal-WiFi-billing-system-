@@ -22,7 +22,7 @@ router.get('/health', async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       postgres: { status: 'error', message: error?.message || 'Database check failed' },
-      paystack: { status: 'error', message: error?.message || 'Paystack check failed' },
+      bachs: { status: 'error', message: error?.message || 'Bachs check failed' },
       wireguard: { status: 'error', message: error?.message || 'WireGuard check failed' }
     });
   }

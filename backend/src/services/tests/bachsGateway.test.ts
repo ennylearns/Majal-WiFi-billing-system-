@@ -60,6 +60,9 @@ describe('BachsGateway - initiateTransaction', () => {
       BACHS_API_KEY: apiKey
     };
     delete process.env.BACHS_PAYMENT_METHODS;
+    delete process.env.BACHS_SUCCESS_URL;
+    delete process.env.BACHS_CANCEL_URL;
+    delete process.env.FRONTEND_URL;
     originalFetch = globalThis.fetch;
   });
 
@@ -157,6 +160,38 @@ describe('BachsGateway - initiateTransaction', () => {
       /Failed to initialize Bachs checkout session: Bad Request/
     );
   });
+
+  test('includes success_url and cancel_url from public FRONTEND_URL and omits localhost URLs', async () => {
+    let capturedBody: any;
+    globalThis.fetch = (async (_url: any, init?: any) => {
+      capturedBody = JSON.parse(init?.body);
+      return new Response(
+        JSON.stringify({ checkout_id: 'chk_url', checkout_url: 'https://checkout.bachs.io/chk_url' }),
+        { status: 200 }
+      );
+    }) as any;
+
+    const gateway = new BachsGateway();
+
+    // Localhost should be omitted
+    process.env.FRONTEND_URL = 'http://localhost:3000';
+    await gateway.initiateTransaction('u@domain.com', 100, 'plan-1', 'pay-1');
+    assert.equal(capturedBody.success_url, undefined);
+    assert.equal(capturedBody.cancel_url, undefined);
+
+    // Public FRONTEND_URL should be included
+    process.env.FRONTEND_URL = 'https://portal.example.com/';
+    await gateway.initiateTransaction('u@domain.com', 100, 'plan-1', 'pay-2');
+    assert.equal(capturedBody.success_url, 'https://portal.example.com');
+    assert.equal(capturedBody.cancel_url, 'https://portal.example.com?payment_cancelled=true');
+
+    // Explicit BACHS_SUCCESS_URL / BACHS_CANCEL_URL override FRONTEND_URL
+    process.env.BACHS_SUCCESS_URL = 'https://custom.example.com/done';
+    process.env.BACHS_CANCEL_URL = 'https://custom.example.com/cancelled';
+    await gateway.initiateTransaction('u@domain.com', 100, 'plan-1', 'pay-3');
+    assert.equal(capturedBody.success_url, 'https://custom.example.com/done');
+    assert.equal(capturedBody.cancel_url, 'https://custom.example.com/cancelled');
+  });
 });
 
 describe('BachsGateway - verifyTransaction', () => {
@@ -239,6 +274,29 @@ describe('BachsGateway - verifyTransaction', () => {
       assert.equal(result.status, expectedStatus, `Expected ${remoteStatus} -> ${expectedStatus}`);
       assert.equal(result.amount, 100);
     }
+  });
+
+  test('maps completed/succeeded (live Bachs API format) and expired/failed statuses', async () => {
+    const gateway = new BachsGateway();
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          checkout_id: 'chk_live_shape',
+          status: 'completed',
+          payment_status: 'succeeded',
+          amount: '100.00',
+          currency: 'NGN',
+          completed_at: '2026-11-25T13:16:47.544635Z',
+          metadata: { paymentId: 'pay-100' }
+        }),
+        { status: 200 }
+      );
+    }) as any;
+
+    const result = await gateway.verifyTransaction('chk_live_shape');
+    assert.equal(result.status, 'success');
+    assert.equal(result.amount, 100);
+    assert.equal(result.paidAt, '2026-11-25T13:16:47.544635Z');
   });
 
   test('throws when verification request returns non-ok HTTP status', async () => {
@@ -335,6 +393,33 @@ describe('BachsGateway - verifyWebhookSignature', () => {
     assert.equal(
       gateway.verifyWebhookSignature(rawBody, sign(rawBody, withinFuture), withinFuture),
       true
+    );
+  });
+
+  test('verifies X-Bachs-Signature-V2 header format (t=...,v1=...) including multiple v1 signatures', () => {
+    const v2Secret = 'whsec_test_secret_v2';
+    const gateway = new BachsGateway({
+      apiKey: 'sk_sandbox_test_123',
+      webhookSecret: v2Secret
+    });
+    const rawBody = JSON.stringify({ event: 'collection.succeeded', data: { reference: 'pay_v2' } });
+    const ts = String(Math.floor(Date.now() / 1000));
+    const validSig = crypto
+      .createHmac('sha256', v2Secret)
+      .update(`${ts}.${rawBody}`)
+      .digest('hex');
+
+    assert.equal(
+      gateway.verifyWebhookSignature(rawBody, `t=${ts},v1=${validSig}`),
+      true
+    );
+    assert.equal(
+      gateway.verifyWebhookSignature(rawBody, `t=${ts},v1=${'0'.repeat(64)},v1=${validSig}`),
+      true
+    );
+    assert.equal(
+      gateway.verifyWebhookSignature(rawBody, `t=${ts},v1=${'0'.repeat(64)}`),
+      false
     );
   });
 });

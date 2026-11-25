@@ -14,7 +14,7 @@ export interface ServiceHealth {
 
 export interface HealthCheckResponse {
   postgres: ServiceHealth;
-  paystack: ServiceHealth;
+  bachs: ServiceHealth;
   wireguard: ServiceHealth;
 }
 
@@ -55,8 +55,8 @@ export class HealthService {
     }
   }
 
-  public checkPaystack(): ServiceHealth {
-    const key = process.env.PAYSTACK_SECRET_KEY;
+  public checkBachs(): ServiceHealth {
+    const key = process.env.BACHS_API_KEY;
     if (key && key.trim().length > 0) {
       return {
         status: 'ok',
@@ -65,7 +65,7 @@ export class HealthService {
     }
     return {
       status: 'error',
-      message: 'PAYSTACK_SECRET_KEY is not set'
+      message: 'BACHS_API_KEY is not set'
     };
   }
 
@@ -89,11 +89,11 @@ export class HealthService {
       this.checkPostgres(),
       this.checkWireguard()
     ]);
-    const paystack = this.checkPaystack();
+    const bachs = this.checkBachs();
 
     return {
       postgres,
-      paystack,
+      bachs,
       wireguard
     };
   }

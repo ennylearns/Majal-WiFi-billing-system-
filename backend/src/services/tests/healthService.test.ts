@@ -39,23 +39,23 @@ describe('HealthService Unit Tests', () => {
     });
   });
 
-  describe('Paystack Check', () => {
-    test('returns ok when PAYSTACK_SECRET_KEY is defined', () => {
-      process.env.PAYSTACK_SECRET_KEY = 'sk_test_1234567890';
+  describe('Bachs Check', () => {
+    test('returns ok when BACHS_API_KEY is defined', () => {
+      process.env.BACHS_API_KEY = 'sk_sandbox_1234567890';
       const service = new HealthService({});
-      const result = service.checkPaystack();
+      const result = service.checkBachs();
 
       assert.equal(result.status, 'ok');
       assert.equal(result.message, 'Configured');
     });
 
-    test('returns error when PAYSTACK_SECRET_KEY is missing or empty', () => {
-      delete process.env.PAYSTACK_SECRET_KEY;
+    test('returns error when BACHS_API_KEY is missing or empty', () => {
+      delete process.env.BACHS_API_KEY;
       const service = new HealthService({});
-      const result = service.checkPaystack();
+      const result = service.checkBachs();
 
       assert.equal(result.status, 'error');
-      assert.equal(result.message, 'PAYSTACK_SECRET_KEY is not set');
+      assert.equal(result.message, 'BACHS_API_KEY is not set');
     });
   });
 
@@ -85,8 +85,8 @@ describe('HealthService Unit Tests', () => {
   });
 
   describe('Aggregated checkHealth()', () => {
-    test('aggregates postgres, paystack, and wireguard statuses', async () => {
-      process.env.PAYSTACK_SECRET_KEY = 'sk_live_abc';
+    test('aggregates postgres, bachs, and wireguard statuses', async () => {
+      process.env.BACHS_API_KEY = 'sk_live_abc';
       const stubPrisma = {
         $queryRaw: async () => [{ '?column?': 1 }]
       };
@@ -97,7 +97,7 @@ describe('HealthService Unit Tests', () => {
 
       assert.deepEqual(result, {
         postgres: { status: 'ok', message: 'Connected' },
-        paystack: { status: 'ok', message: 'Configured' },
+        bachs: { status: 'ok', message: 'Configured' },
         wireguard: { status: 'ok', message: 'Interface active' }
       });
     });

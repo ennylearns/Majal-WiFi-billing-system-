@@ -13,15 +13,15 @@ const SettingsPage: React.FC = () => {
     timezone: import.meta.env.VITE_TIMEZONE || 'Africa/Nairobi'
   }
 
-  const paystackConfig = {
-    webhookUrl: import.meta.env.VITE_PAYSTACK_WEBHOOK_URL || '/api/public/payment/paystack/webhook',
-    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder',
-    secretKey: '••••••••••••••••••••••••••••••••'
+  const bachsConfig = {
+    webhookUrl: '/api/public/payment/webhook',
+    apiKey: '••••••••••••••••••••••••••••••••',
+    webhookSecret: '••••••••••••••••••••••••••••••••'
   }
 
   const tabs = [
     { id: 'general', name: 'General', icon: Settings },
-    { id: 'paystack', name: 'Paystack', icon: DollarSign },
+    { id: 'bachs', name: 'Bachs', icon: DollarSign },
     { id: 'router', name: 'Router', icon: Wifi },
     { id: 'notifications', name: 'Notifications', icon: Bell }
   ]
@@ -86,43 +86,43 @@ const SettingsPage: React.FC = () => {
     </div>
   )
 
-  const renderPaystackSettings = () => (
+  const renderBachsSettings = () => (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
         <p className="font-semibold mb-1">Webhook Configuration</p>
-        <p>Register the webhook URL <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs">{paystackConfig.webhookUrl}</code> in your Paystack dashboard under <strong>Settings → API Keys &amp; Webhooks</strong>.</p>
+        <p>Register the webhook URL <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs">{bachsConfig.webhookUrl}</code> in your Bachs dashboard under <strong>Developers → Webhooks</strong>.</p>
       </div>
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
-        <p>Paystack integration values are configured via deployment environment variables. Secret key is masked and protected on the server.</p>
+        <p>Bachs integration values are configured via deployment environment variables (<code className="font-mono text-xs">BACHS_API_KEY</code>, <code className="font-mono text-xs">BACHS_WEBHOOK_SECRET</code>). Keys are masked and protected on the server.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label htmlFor="paystackPublicKey" className="block text-sm font-medium text-gray-700 mb-2">Public Key</label>
+          <label htmlFor="bachsApiKey" className="block text-sm font-medium text-gray-700 mb-2">BACHS_API_KEY</label>
           <input
-            id="paystackPublicKey"
+            id="bachsApiKey"
             type="text"
             readOnly
-            value={paystackConfig.publicKey}
+            value={bachsConfig.apiKey}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed font-mono text-sm focus:outline-none"
           />
         </div>
         <div>
-          <label htmlFor="paystackSecretKey" className="block text-sm font-medium text-gray-700 mb-2">Secret Key</label>
+          <label htmlFor="bachsWebhookSecret" className="block text-sm font-medium text-gray-700 mb-2">BACHS_WEBHOOK_SECRET</label>
           <input
-            id="paystackSecretKey"
+            id="bachsWebhookSecret"
             type="text"
             readOnly
-            value={paystackConfig.secretKey}
+            value={bachsConfig.webhookSecret}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed font-mono text-sm focus:outline-none"
           />
         </div>
         <div className="md:col-span-2">
-          <label htmlFor="paystackWebhookUrl" className="block text-sm font-medium text-gray-700 mb-2">Webhook URL</label>
+          <label htmlFor="bachsWebhookUrl" className="block text-sm font-medium text-gray-700 mb-2">Webhook URL</label>
           <input
-            id="paystackWebhookUrl"
+            id="bachsWebhookUrl"
             type="text"
             readOnly
-            value={paystackConfig.webhookUrl}
+            value={bachsConfig.webhookUrl}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed font-mono text-sm focus:outline-none"
           />
         </div>
@@ -212,7 +212,7 @@ const SettingsPage: React.FC = () => {
 
         <div className="p-6">
           {activeTab === 'general' && renderGeneralSettings()}
-          {activeTab === 'paystack' && renderPaystackSettings()}
+          {activeTab === 'bachs' && renderBachsSettings()}
           {activeTab === 'router' && renderRouterTab()}
           {activeTab === 'notifications' && renderNotificationSettings()}
         </div>

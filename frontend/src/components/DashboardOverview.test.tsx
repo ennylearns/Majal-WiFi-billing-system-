@@ -36,7 +36,7 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
   it('fetches health check on mount and renders live infrastructure rows with real status and message', async () => {
     vi.mocked(adminAPI.getHealth).mockResolvedValueOnce({
       postgres: { status: 'ok', message: 'Connected' },
-      paystack: { status: 'ok', message: 'Configured' },
+      bachs: { status: 'ok', message: 'Configured' },
       wireguard: { status: 'ok', message: 'Interface active' },
     })
 
@@ -50,7 +50,7 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
 
     await waitFor(() => {
       expect(screen.getByText('PostgreSQL Database')).toBeInTheDocument()
-      expect(screen.getByText('Paystack')).toBeInTheDocument()
+      expect(screen.getByText('Bachs')).toBeInTheDocument()
       expect(screen.getByText('WireGuard')).toBeInTheDocument()
     })
 
@@ -91,7 +91,7 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
 
     resolveHealth({
       postgres: { status: 'ok', message: 'Connected' },
-      paystack: { status: 'ok', message: 'Configured' },
+      bachs: { status: 'ok', message: 'Configured' },
       wireguard: { status: 'ok', message: 'Interface active' },
     })
 
@@ -123,7 +123,7 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
   it('does not render KPI trend badges', () => {
     vi.mocked(adminAPI.getHealth).mockResolvedValueOnce({
       postgres: { status: 'ok', message: 'Connected' },
-      paystack: { status: 'ok', message: 'Configured' },
+      bachs: { status: 'ok', message: 'Configured' },
       wireguard: { status: 'ok', message: 'Interface active' },
     })
 
@@ -140,7 +140,7 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
   it('does not render Export Log, Issue Voucher, or Filter buttons', () => {
     vi.mocked(adminAPI.getHealth).mockResolvedValueOnce({
       postgres: { status: 'ok', message: 'Connected' },
-      paystack: { status: 'ok', message: 'Configured' },
+      bachs: { status: 'ok', message: 'Configured' },
       wireguard: { status: 'ok', message: 'Interface active' },
     })
 
@@ -158,7 +158,7 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
   it('renders error status and message when a service check fails', async () => {
     vi.mocked(adminAPI.getHealth).mockResolvedValueOnce({
       postgres: { status: 'ok', message: 'Connected' },
-      paystack: { status: 'error', message: 'PAYSTACK_SECRET_KEY is not set' },
+      bachs: { status: 'error', message: 'BACHS_API_KEY is not set' },
       wireguard: { status: 'error', message: 'wg show failed: interface down' },
     })
 
@@ -170,12 +170,12 @@ describe('DashboardOverview Component - Infrastructure Status', () => {
 
     await waitFor(() => {
       expect(screen.getByText('PostgreSQL Database')).toBeInTheDocument()
-      expect(screen.getByText('Paystack')).toBeInTheDocument()
+      expect(screen.getByText('Bachs')).toBeInTheDocument()
       expect(screen.getByText('WireGuard')).toBeInTheDocument()
     })
 
     expect(screen.getByText('Connected')).toBeInTheDocument()
-    expect(screen.getByText('PAYSTACK_SECRET_KEY is not set')).toBeInTheDocument()
+    expect(screen.getByText('BACHS_API_KEY is not set')).toBeInTheDocument()
     expect(screen.getByText('wg show failed: interface down')).toBeInTheDocument()
 
     expect(screen.getByText('System Issues Detected')).toBeInTheDocument()

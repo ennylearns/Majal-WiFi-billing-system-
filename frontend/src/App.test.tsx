@@ -12,7 +12,7 @@ vi.mock('./services/api', () => ({
     getPayments: vi.fn().mockResolvedValue({ success: true, data: { payments: [] } }),
     getHealth: vi.fn().mockResolvedValue({
       postgres: { status: 'ok', message: 'Connected' },
-      paystack: { status: 'ok', message: 'Configured' },
+      bachs: { status: 'ok', message: 'Configured' },
       wireguard: { status: 'ok', message: 'Interface active' },
     }),
   },

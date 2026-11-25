@@ -25,29 +25,30 @@ describe('SettingsPage Component', () => {
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument()
   })
 
-  it('renders Paystack tab as read-only with masked secret key and no Save button', () => {
+  it('renders Bachs tab as read-only with masked keys and no Save button', () => {
     render(
       <MemoryRouter>
         <SettingsPage />
       </MemoryRouter>
     )
 
-    // Switch to Paystack tab
-    const paystackTab = screen.getByRole('button', { name: /paystack/i })
-    fireEvent.click(paystackTab)
+    // Switch to Bachs tab
+    const bachsTab = screen.getByRole('button', { name: /bachs/i })
+    fireEvent.click(bachsTab)
 
-    const publicKeyInput = screen.getByLabelText(/public key/i)
-    expect(publicKeyInput).toHaveAttribute('readOnly')
+    const apiKeyInput = screen.getByLabelText(/BACHS_API_KEY/i)
+    expect(apiKeyInput).toHaveAttribute('readOnly')
+    expect(apiKeyInput).toHaveValue('••••••••••••••••••••••••••••••••')
 
-    const secretKeyInput = screen.getByLabelText(/secret key/i)
-    expect(secretKeyInput).toHaveAttribute('readOnly')
-    // Secret key is masked
-    expect(secretKeyInput).toHaveValue('••••••••••••••••••••••••••••••••')
+    const webhookSecretInput = screen.getByLabelText(/BACHS_WEBHOOK_SECRET/i)
+    expect(webhookSecretInput).toHaveAttribute('readOnly')
+    expect(webhookSecretInput).toHaveValue('••••••••••••••••••••••••••••••••')
 
     const webhookInput = screen.getByLabelText(/webhook url/i)
     expect(webhookInput).toHaveAttribute('readOnly')
+    expect(webhookInput).toHaveValue('/api/public/payment/webhook')
 
-    // No Save Paystack button
+    // No Save button
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument()
   })
 

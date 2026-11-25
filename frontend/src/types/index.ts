@@ -83,7 +83,7 @@ export interface HealthServiceStatus {
 
 export interface HealthCheckResponse {
   postgres: HealthServiceStatus
-  paystack: HealthServiceStatus
+  bachs: HealthServiceStatus
   wireguard: HealthServiceStatus
 }
 
@@ -130,12 +130,14 @@ export interface PaymentRequest {
 export interface PaymentInitiateData {
   reference: string
   access_code: string
+  authorization_url?: string
 }
 
 export interface PaymentStatusResponse {
   status: 'pending' | 'completed' | 'failed' | 'timeout'
   sessionToken?: string
   amount?: number
+  payment?: Payment
 }
 
 export interface ConnectionRequest {

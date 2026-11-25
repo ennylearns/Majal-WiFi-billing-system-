@@ -342,11 +342,34 @@ export class BachsGateway implements PaymentGateway {
 
   verifyWebhookSignature(rawBody: string | Buffer | any, signature: string, timestamp?: string): boolean {
     const secret = this.webhookSecret;
-    if (!signature || !timestamp || !secret) {
+    if (!signature || !secret) {
       return false;
     }
 
-    const parsedTimestamp = Number(timestamp);
+    let effectiveTimestamp = timestamp;
+    const candidateSignatures: string[] = [];
+
+    if (signature.includes(',')) {
+      for (const part of signature.split(',')) {
+        const eqIdx = part.indexOf('=');
+        if (eqIdx === -1) continue;
+        const key = part.slice(0, eqIdx).trim();
+        const val = part.slice(eqIdx + 1).trim();
+        if (key === 't' && !effectiveTimestamp) {
+          effectiveTimestamp = val;
+        } else if (key === 'v1' && val) {
+          candidateSignatures.push(val);
+        }
+      }
+    } else {
+      candidateSignatures.push(signature.trim());
+    }
+
+    if (!effectiveTimestamp || candidateSignatures.length === 0) {
+      return false;
+    }
+
+    const parsedTimestamp = Number(effectiveTimestamp);
     if (!Number.isFinite(parsedTimestamp)) {
       return false;
     }
@@ -363,16 +386,17 @@ export class BachsGateway implements PaymentGateway {
 
     const expectedHash = crypto
       .createHmac('sha256', secret)
-      .update(`${timestamp}.${payload}`)
+      .update(`${effectiveTimestamp}.${payload}`)
       .digest('hex');
 
     const expectedBuffer = Buffer.from(expectedHash, 'utf8');
-    const actualBuffer = Buffer.from(signature, 'utf8');
-    if (expectedBuffer.length !== actualBuffer.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+    return candidateSignatures.some((sig) => {
+      const actualBuffer = Buffer.from(sig, 'utf8');
+      return (
+        expectedBuffer.length === actualBuffer.length &&
+        crypto.timingSafeEqual(expectedBuffer, actualBuffer)
+      );
+    });
   }
 
   verifySignature(rawBody: string | Buffer | any, signature: string, timestamp?: string): boolean {
@@ -393,6 +417,43 @@ export class BachsGateway implements PaymentGateway {
     return ['NGN_CARD', 'NGN_BANK_TRANSFER'];
   }
 
+  private isPublicUrl(url?: string): url is string {
+    if (!url) return false;
+    try {
+      const parsed = new URL(url.trim());
+      const host = parsed.hostname.toLowerCase();
+      return (
+        (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+        host !== 'localhost' &&
+        host !== '127.0.0.1' &&
+        host !== '::1'
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private getRedirectUrls(): { success_url?: string; cancel_url?: string } {
+    const frontendBase = this.isPublicUrl(process.env.FRONTEND_URL)
+      ? process.env.FRONTEND_URL.trim().replace(/\/+$/, '')
+      : undefined;
+
+    const successUrl = this.isPublicUrl(process.env.BACHS_SUCCESS_URL)
+      ? process.env.BACHS_SUCCESS_URL.trim()
+      : frontendBase;
+
+    const cancelUrl = this.isPublicUrl(process.env.BACHS_CANCEL_URL)
+      ? process.env.BACHS_CANCEL_URL.trim()
+      : frontendBase
+        ? `${frontendBase}?payment_cancelled=true`
+        : undefined;
+
+    return {
+      ...(successUrl ? { success_url: successUrl } : {}),
+      ...(cancelUrl ? { cancel_url: cancelUrl } : {})
+    };
+  }
+
   async initiateTransaction(
     paramsOrEmail: InitiatePaymentParams | string,
     amount?: number,
@@ -411,6 +472,8 @@ export class BachsGateway implements PaymentGateway {
       );
     }
 
+    const redirectUrls = this.getRedirectUrls();
+
     const response = await fetch(`${this.baseURL}/v1/checkout-sessions`, {
       method: 'POST',
       headers: {
@@ -427,6 +490,7 @@ export class BachsGateway implements PaymentGateway {
         customer_creation: 'if_required',
         customer: { email: params.email },
         reference: params.paymentId,
+        ...redirectUrls,
         metadata: {
           paymentId: params.paymentId,
           planId: params.planId,
@@ -436,7 +500,16 @@ export class BachsGateway implements PaymentGateway {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to initialize Bachs checkout session: ${response.statusText}`);
+      let detail = response.statusText;
+      try {
+        const errBody: any = await response.json();
+        if (errBody?.detail) {
+          detail = `${response.statusText} - ${errBody.detail}`;
+        }
+      } catch {
+        // Ignore non-JSON error bodies
+      }
+      throw new Error(`Failed to initialize Bachs checkout session: ${detail}`);
     }
 
     const data: any = await response.json();
@@ -475,10 +548,23 @@ export class BachsGateway implements PaymentGateway {
     const data: any = await response.json();
     const payload = data.data ?? data;
 
+    const rawStatus = String(payload.status || '').toUpperCase();
+    const paymentStatus = String(payload.payment_status || payload.charge?.status || '').toUpperCase();
+
     let status = 'pending';
-    if (payload.status === 'PAID') {
+    if (
+      rawStatus === 'PAID' ||
+      rawStatus === 'COMPLETED' ||
+      paymentStatus === 'SUCCEEDED' ||
+      paymentStatus === 'PAID'
+    ) {
       status = 'success';
-    } else if (payload.status === 'EXPIRED' || payload.status === 'FAILED') {
+    } else if (
+      rawStatus === 'EXPIRED' ||
+      rawStatus === 'FAILED' ||
+      rawStatus === 'CANCELLED' ||
+      paymentStatus === 'FAILED'
+    ) {
       status = 'failed';
     }
 
@@ -488,7 +574,7 @@ export class BachsGateway implements PaymentGateway {
       status,
       amount,
       reference: payload.checkout_id || reference,
-      paidAt: payload.paid_at,
+      paidAt: payload.completed_at ?? payload.paid_at,
       metadata: payload.metadata
     };
   }

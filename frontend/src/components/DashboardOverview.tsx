@@ -79,7 +79,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
       .catch(() => {
         setHealth({
           postgres: { status: 'error', message: 'Failed to fetch status' },
-          paystack: { status: 'error', message: 'Failed to fetch status' },
+          bachs: { status: 'error', message: 'Failed to fetch status' },
           wireguard: { status: 'error', message: 'Failed to fetch status' }
         })
       })
@@ -259,7 +259,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
               className={`text-[11px] font-mono font-medium hover:underline ${
                 health &&
                 health.postgres.status === 'ok' &&
-                health.paystack.status === 'ok' &&
+                health.bachs.status === 'ok' &&
                 health.wireguard.status === 'ok'
                   ? 'text-status-success'
                   : health
@@ -271,7 +271,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
                 ? 'Checking Systems…'
                 : health &&
                   health.postgres.status === 'ok' &&
-                  health.paystack.status === 'ok' &&
+                  health.bachs.status === 'ok' &&
                   health.wireguard.status === 'ok'
                 ? 'All Systems Operational'
                 : 'System Issues Detected'}
@@ -289,10 +289,10 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, onRefresh 
                   variant: (health?.postgres.status === 'ok' ? 'success' : 'danger') as BadgeVariant
                 },
                 {
-                  label: 'Paystack',
-                  status: health?.paystack.status === 'ok' ? 'Online' : 'Error',
-                  detail: health?.paystack.message || (health?.paystack.status === 'ok' ? 'Configured' : 'Missing configuration'),
-                  variant: (health?.paystack.status === 'ok' ? 'success' : 'danger') as BadgeVariant
+                  label: 'Bachs',
+                  status: health?.bachs.status === 'ok' ? 'Online' : 'Error',
+                  detail: health?.bachs.message || (health?.bachs.status === 'ok' ? 'Configured' : 'Missing configuration'),
+                  variant: (health?.bachs.status === 'ok' ? 'success' : 'danger') as BadgeVariant
                 },
                 {
                   label: 'WireGuard',

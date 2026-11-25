@@ -51,6 +51,9 @@ const CustomerPortal: React.FC = () => {
   const paramEmail = searchParams.get('email') || ''
 
   const rawRouterParam = searchParams.get('routerId') || searchParams.get('router')
+  const checkoutIdParam = searchParams.get('checkout_id')
+  const paymentCancelledParam = searchParams.get('payment_cancelled') || searchParams.get('cancelled')
+  const handledRedirectRef = useRef<string | null>(null)
 
   // Called by the countdown when it reaches 00:00
   const handleTrialExpired = useCallback(() => {
@@ -78,6 +81,27 @@ const CustomerPortal: React.FC = () => {
   useEffect(() => {
     loadPortalData()
   }, [rawRouterParam])
+
+  useEffect(() => {
+    if (checkoutIdParam && handledRedirectRef.current !== `checkout:${checkoutIdParam}`) {
+      handledRedirectRef.current = `checkout:${checkoutIdParam}`
+      setShowPayment(true)
+      setPaymentStatus('verifying')
+      setLoading(true)
+      pollPaymentStatus(
+        checkoutIdParam,
+        selectedPlan ?? undefined,
+        guestPhone || paramPhone || undefined,
+        guestEmail || paramEmail || undefined
+      )
+    } else if (paymentCancelledParam && handledRedirectRef.current !== `cancelled:${paymentCancelledParam}`) {
+      handledRedirectRef.current = `cancelled:${paymentCancelledParam}`
+      setShowPayment(true)
+      setPaymentStatus('cancelled')
+      setLoading(false)
+      toast.error('Payment cancelled — try again')
+    }
+  }, [checkoutIdParam, paymentCancelledParam])
 
   useEffect(() => {
     if (clientMac) {
@@ -227,13 +251,26 @@ const CustomerPortal: React.FC = () => {
       })
 
       const reference = response.data?.reference || (response as any).reference
-      const accessCode = response.data?.access_code || (response as any).access_code
+      const authorizationUrl = response.data?.authorization_url || (response as any).authorization_url
 
       if (!reference) {
         throw new Error('No payment reference returned from server')
       }
 
-      openPaystackPopup(reference, accessCode, plan, phone, email)
+      if (authorizationUrl && authorizationUrl.startsWith('https://checkout.bachs.io/mock/')) {
+        // Mock mode: stay on portal and poll status directly
+        setPaymentStatus('verifying')
+        setLoading(true)
+        pollPaymentStatus(reference, plan, phone, email)
+      } else if (authorizationUrl) {
+        // Redirect to Bachs hosted checkout page
+        window.location.href = authorizationUrl
+      } else {
+        // Fallback: poll status directly if no authorizationUrl was returned
+        setPaymentStatus('verifying')
+        setLoading(true)
+        pollPaymentStatus(reference, plan, phone, email)
+      }
     } catch (error: any) {
       setLoading(false)
       setPaymentStatus(null)
@@ -242,88 +279,7 @@ const CustomerPortal: React.FC = () => {
     }
   }
 
-  const openPaystackPopup = (
-    reference: string,
-    accessCode: string | undefined,
-    plan: Plan,
-    phone?: string,
-    email?: string
-  ) => {
-    const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || ''
-    const PaystackClass = (window as any).PaystackPop
-    const customerEmail = email || guestEmail || paramEmail || 'customer@majalisp.com'
-    const customerPhone = phone || guestPhone || paramPhone || ''
-
-    const handleSuccess = (transaction: any) => {
-      isPaymentConfirmedRef.current = true
-      setPaymentStatus('verifying')
-      setLoading(true)
-      const txnRef = transaction?.reference || reference
-      pollPaymentStatus(txnRef, plan, customerPhone, customerEmail)
-    }
-
-    const handleClose = () => {
-      if (!isPaymentConfirmedRef.current) {
-        setLoading(false)
-        setPaymentStatus('cancelled')
-        toast.error('Payment cancelled — try again')
-      }
-    }
-
-    if (PaystackClass) {
-      if (typeof PaystackClass.setup === 'function') {
-        const handler = PaystackClass.setup({
-          key: publicKey,
-          email: customerEmail,
-          customer: {
-            email: customerEmail,
-            phone: customerPhone,
-          },
-          amount: Math.round(plan.price * 100),
-          ref: reference,
-          access_code: accessCode,
-          callback: (transaction: any) => {
-            handleSuccess(transaction)
-          },
-          onSuccess: (transaction: any) => {
-            handleSuccess(transaction)
-          },
-          onClose: () => {
-            handleClose()
-          }
-        })
-        handler.openIframe()
-      } else {
-        const popup = new PaystackClass()
-        popup.checkout({
-          key: publicKey,
-          email: customerEmail,
-          customer: {
-            email: customerEmail,
-            phone: customerPhone,
-          },
-          accessCode: accessCode,
-          reference: reference,
-          onSuccess: (transaction: any) => {
-            handleSuccess(transaction)
-          },
-          onCancel: () => {
-            handleClose()
-          },
-          onClose: () => {
-            handleClose()
-          }
-        })
-      }
-    } else {
-      // In development or if script blocked, allow polling fallback or show error
-      setLoading(false)
-      setPaymentStatus('cancelled')
-      toast.error('Paystack popup unavailable. Please ensure online connectivity.')
-    }
-  }
-
-  const pollPaymentStatus = async (reference: string, plan: Plan, phone?: string, email?: string) => {
+  const pollPaymentStatus = async (reference: string, plan?: Plan, phone?: string, email?: string) => {
     const maxAttempts = 30
     let attempts = 0
 
@@ -332,7 +288,7 @@ const CustomerPortal: React.FC = () => {
         const response = await publicAPI.getPaymentStatus(reference, { phone, email })
 
         if (response.success && response.data) {
-          const { status, sessionToken } = response.data
+          const { status, sessionToken, payment } = response.data
 
           if (status === 'completed') {
             isPaymentConfirmedRef.current = true
@@ -342,11 +298,13 @@ const CustomerPortal: React.FC = () => {
             setTrialExpiredBanner(false) // dismiss expired-trial banner on successful purchase
             setTrialStatus(null) // dismiss trial countdown banner and clear trial state immediately
 
+            const resolvedPlan = plan || payment?.plan
             if (sessionToken) {
-              await connectToInternet(sessionToken, plan)
+              await connectToInternet(sessionToken, resolvedPlan)
             } else {
-              const defaultExpiry = new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
-              markPaidSessionConnected(plan.name, defaultExpiry)
+              const durationHours = resolvedPlan?.duration ?? 1
+              const defaultExpiry = new Date(Date.now() + durationHours * 3600 * 1000).toISOString()
+              markPaidSessionConnected(resolvedPlan?.name || 'WiFi Plan', defaultExpiry)
             }
             return
           } else if (status === 'failed') {
@@ -393,17 +351,18 @@ const CustomerPortal: React.FC = () => {
   const isTrialSession = (session: ConnectedSessionInfo | null): boolean =>
     session?.plan === '10-Minute Free Trial'
 
-  const connectToInternet = async (sessionToken: string, plan: Plan) => {
-    const defaultExpiry = new Date(Date.now() + plan.duration * 3600 * 1000).toISOString()
+  const connectToInternet = async (sessionToken: string, plan?: Plan) => {
+    const durationHours = plan?.duration ?? 1
+    const defaultExpiry = new Date(Date.now() + durationHours * 3600 * 1000).toISOString()
     try {
       const response = await publicAPI.connect({ sessionToken })
-      const sessionPlan = response.data?.session?.plan || plan.name
+      const sessionPlan = response.data?.session?.plan || plan?.name || 'WiFi Plan'
       const sessionEndTime = response.data?.session?.endTime || defaultExpiry
       markPaidSessionConnected(sessionPlan, sessionEndTime)
       toast.success('Connected to internet successfully!')
     } catch (error) {
       // Session exists even if MikroTik disconnects
-      markPaidSessionConnected(plan.name, defaultExpiry)
+      markPaidSessionConnected(plan?.name || 'WiFi Plan', defaultExpiry)
     }
   }
 
@@ -696,7 +655,7 @@ const CustomerPortal: React.FC = () => {
             Fast WiFi in seconds
           </h1>
           <p className="text-base text-text-secondary leading-relaxed">
-            Select a pass, authorize payment instantly via M-Pesa or Card with Paystack, and browse without voucher codes.
+            Select a pass, authorize payment instantly via M-Pesa or Card, and browse without voucher codes.
           </p>
         </section>
 
@@ -1064,7 +1023,7 @@ const CustomerPortal: React.FC = () => {
                   type="submit"
                   className="w-full h-10 rounded-control bg-primary hover:bg-primary-hover text-white font-medium text-xs flex items-center justify-center transition-colors shadow-sm"
                 >
-                  Continue to Paystack
+                  Continue to Payment
                 </button>
               </div>
             </form>
@@ -1108,8 +1067,8 @@ const CustomerPortal: React.FC = () => {
 
                 <div className="py-6 text-center">
                   <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-3"></div>
-                  <h5 className="text-sm font-semibold text-text-primary mb-1">Opening Paystack Checkout</h5>
-                  <p className="text-xs text-text-muted">Please complete payment in the Paystack window...</p>
+                  <h5 className="text-sm font-semibold text-text-primary mb-1">Redirecting to Checkout</h5>
+                  <p className="text-xs text-text-muted">Redirecting you to complete your payment...</p>
                 </div>
               </div>
             )}
@@ -1120,7 +1079,7 @@ const CustomerPortal: React.FC = () => {
                 <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-3"></div>
                 <h5 className="text-sm font-semibold text-text-primary mb-1">Confirming Payment</h5>
                 <p className="text-xs text-text-muted">
-                  Verifying your transaction with Paystack and connecting you...
+                  Verifying your payment and connecting you...
                 </p>
               </div>
             )}

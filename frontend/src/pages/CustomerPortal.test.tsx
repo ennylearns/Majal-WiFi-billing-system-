@@ -268,7 +268,7 @@ describe('CustomerPortal Component', () => {
           email: 'guest@test.com',
         })
       )
-      expect(screen.getByText(/Opening Paystack Checkout/i)).toBeInTheDocument()
+      expect(screen.getByText(/Redirecting to Checkout/i)).toBeInTheDocument()
     })
   })
 
@@ -290,7 +290,7 @@ describe('CustomerPortal Component', () => {
     })
 
     // Try submitting without filling inputs
-    fireEvent.click(screen.getByRole('button', { name: /Continue to Paystack/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Continue to Payment/i }))
 
     expect(screen.getByText(/Phone number is required/i)).toBeInTheDocument()
     expect(screen.getByText(/Email address is required/i)).toBeInTheDocument()
@@ -321,7 +321,7 @@ describe('CustomerPortal Component', () => {
 
     const emailInput = screen.getByLabelText(/Email Address/i)
     fireEvent.change(emailInput, { target: { value: 'user@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /Continue to Paystack/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Continue to Payment/i }))
 
     await waitFor(() => {
       expect(publicAPI.makePayment).toHaveBeenCalledWith(
@@ -333,18 +333,73 @@ describe('CustomerPortal Component', () => {
     })
   })
 
-  it('passes collected email and phone to Paystack popup setup replacing hardcoded value', async () => {
-    const mockSetup = vi.fn().mockReturnValue({ openIframe: vi.fn() })
-    ;(window as any).PaystackPop = { setup: mockSetup }
+  it('redirects browser to Bachs authorization_url for hosted checkout', async () => {
+    const originalLocation = window.location
+    const locationMock = { ...originalLocation, href: 'http://localhost:3000/' }
+    Object.defineProperty(window, 'location', {
+      value: locationMock,
+      writable: true,
+      configurable: true,
+    })
 
+    try {
+      vi.mocked(publicAPI.makePayment).mockResolvedValue({
+        success: true,
+        data: {
+          reference: 'chk_live_123',
+          access_code: 'chk_live_123',
+          authorization_url: 'https://checkout.bachs.io/chk_live_123',
+        },
+        reference: 'chk_live_123',
+        access_code: 'chk_live_123',
+      })
+
+      render(
+        <MemoryRouter initialEntries={['/?routerId=router-1&phone=0712345678&email=guest@test.com']}>
+          <CustomerPortal />
+        </MemoryRouter>
+      )
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: /Pay/i }).length).toBeGreaterThan(0)
+      })
+
+      fireEvent.click(screen.getAllByRole('button', { name: /Pay/i })[0])
+
+      await waitFor(() => {
+        expect(window.location.href).toBe('https://checkout.bachs.io/chk_live_123')
+      })
+    } finally {
+      Object.defineProperty(window, 'location', {
+        value: originalLocation,
+        writable: true,
+        configurable: true,
+      })
+    }
+  })
+
+  it('polls payment status directly without redirecting when authorization_url is a Bachs mock URL', async () => {
     vi.mocked(publicAPI.makePayment).mockResolvedValue({
       success: true,
       data: {
-        reference: 'ref-paystack-123',
-        access_code: 'access-123',
+        reference: 'chk_mock_123',
+        access_code: 'chk_mock_123',
+        authorization_url: 'https://checkout.bachs.io/mock/chk_mock_123',
       },
-      reference: 'ref-paystack-123',
-      access_code: 'access-123',
+    })
+    vi.mocked(publicAPI.getPaymentStatus).mockResolvedValue({
+      success: true,
+      data: {
+        status: 'completed',
+        sessionToken: 'tok-mock-1',
+      },
+    })
+    vi.mocked(publicAPI.connect).mockResolvedValue({
+      success: true,
+      data: {
+        message: 'Connected',
+        session: { plan: '1 Hour Pass', endTime: new Date(Date.now() + 3600000).toISOString() },
+      },
     })
 
     render(
@@ -360,15 +415,54 @@ describe('CustomerPortal Component', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Pay/i })[0])
 
     await waitFor(() => {
-      expect(mockSetup).toHaveBeenCalledWith(
-        expect.objectContaining({
-          email: 'guest@test.com',
-          customer: expect.objectContaining({
-            email: 'guest@test.com',
-            phone: '0712345678',
-          }),
-        })
-      )
+      expect(publicAPI.getPaymentStatus).toHaveBeenCalledWith('chk_mock_123', {
+        phone: '0712345678',
+        email: 'guest@test.com',
+      })
+      expect(screen.getByText(/Internet Activated/i)).toBeInTheDocument()
+    })
+  })
+
+  it('handles checkout_id return redirect by polling status and connecting', async () => {
+    vi.mocked(publicAPI.getPaymentStatus).mockResolvedValue({
+      success: true,
+      data: {
+        status: 'completed',
+        sessionToken: 'tok-return-1',
+      },
+    })
+    vi.mocked(publicAPI.connect).mockResolvedValue({
+      success: true,
+      data: {
+        message: 'Connected',
+        session: { plan: '1 Hour Pass', endTime: new Date(Date.now() + 3600000).toISOString() },
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&checkout_id=chk_return_123']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(publicAPI.getPaymentStatus).toHaveBeenCalledWith('chk_return_123', {
+        phone: undefined,
+        email: undefined,
+      })
+      expect(screen.getByText(/Internet Activated/i)).toBeInTheDocument()
+    })
+  })
+
+  it('handles payment_cancelled return redirect by showing cancelled modal', async () => {
+    render(
+      <MemoryRouter initialEntries={['/?routerId=router-1&payment_cancelled=true']}>
+        <CustomerPortal />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Payment Cancelled/i)).toBeInTheDocument()
     })
   })
 })

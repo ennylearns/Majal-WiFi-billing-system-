@@ -83,7 +83,7 @@ export const publicAPI = {
     publicApi.post('/public/login', data).then(res => res.data),
 
   // Payments
-  makePayment: (data: PaymentRequest): Promise<ApiResponse<PaymentInitiateData> & { reference?: string; access_code?: string }> =>
+  makePayment: (data: PaymentRequest): Promise<ApiResponse<PaymentInitiateData> & { reference?: string; access_code?: string; authorization_url?: string }> =>
     publicApi.post('/public/payment', data).then(res => res.data),
 
   getPaymentStatus: (checkoutRequestId: string, params?: { phone?: string; email?: string }): Promise<ApiResponse<PaymentStatusResponse>> =>

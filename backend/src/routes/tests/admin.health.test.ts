@@ -21,7 +21,7 @@ describe('Admin Health Endpoint (GET /api/admin/health)', () => {
   before(async () => {
     process.env.NODE_ENV = 'development';
     process.env.JWT_SECRET = JWT_SECRET;
-    process.env.PAYSTACK_SECRET_KEY = 'sk_test_mock_paystack_key';
+    process.env.BACHS_API_KEY = 'sk_sandbox_mock_bachs_key';
 
     const app = express();
     app.use(express.json());
@@ -71,7 +71,7 @@ describe('Admin Health Endpoint (GET /api/admin/health)', () => {
   });
 
   beforeEach(() => {
-    process.env.PAYSTACK_SECRET_KEY = 'sk_test_mock_paystack_key';
+    process.env.BACHS_API_KEY = 'sk_sandbox_mock_bachs_key';
     // Stub wireguard exec to succeed by default in tests
     healthService.setExecFn(async (cmd: string) => {
       if (cmd === 'wg show') return { stdout: 'interface: wg0', stderr: '' };
@@ -107,11 +107,11 @@ describe('Admin Health Endpoint (GET /api/admin/health)', () => {
     const body = (await res.json()) as any;
 
     assert.ok(body.postgres, 'postgres property must be present');
-    assert.ok(body.paystack, 'paystack property must be present');
+    assert.ok(body.bachs, 'bachs property must be present');
     assert.ok(body.wireguard, 'wireguard property must be present');
 
     assert.equal(typeof body.postgres.status, 'string');
-    assert.equal(typeof body.paystack.status, 'string');
+    assert.equal(typeof body.bachs.status, 'string');
     assert.equal(typeof body.wireguard.status, 'string');
   });
 
@@ -153,8 +153,8 @@ describe('Admin Health Endpoint (GET /api/admin/health)', () => {
     assert.equal(body.postgres.message, 'Connection refused by postgres:5432');
   });
 
-  test('returns paystack.status = ok when PAYSTACK_SECRET_KEY is set', async () => {
-    process.env.PAYSTACK_SECRET_KEY = 'sk_live_dummy_secret';
+  test('returns bachs.status = ok when BACHS_API_KEY is set', async () => {
+    process.env.BACHS_API_KEY = 'sk_live_dummy_secret';
 
     const res = await fetch(`${adminBaseUrl}/health`, {
       headers: {
@@ -164,12 +164,12 @@ describe('Admin Health Endpoint (GET /api/admin/health)', () => {
 
     assert.equal(res.status, 200);
     const body = (await res.json()) as any;
-    assert.equal(body.paystack.status, 'ok');
-    assert.equal(body.paystack.message, 'Configured');
+    assert.equal(body.bachs.status, 'ok');
+    assert.equal(body.bachs.message, 'Configured');
   });
 
-  test('returns paystack.status = error when PAYSTACK_SECRET_KEY is unset', async () => {
-    delete process.env.PAYSTACK_SECRET_KEY;
+  test('returns bachs.status = error when BACHS_API_KEY is unset', async () => {
+    delete process.env.BACHS_API_KEY;
 
     const res = await fetch(`${adminBaseUrl}/health`, {
       headers: {
@@ -179,8 +179,8 @@ describe('Admin Health Endpoint (GET /api/admin/health)', () => {
 
     assert.equal(res.status, 200);
     const body = (await res.json()) as any;
-    assert.equal(body.paystack.status, 'error');
-    assert.equal(body.paystack.message, 'PAYSTACK_SECRET_KEY is not set');
+    assert.equal(body.bachs.status, 'error');
+    assert.equal(body.bachs.message, 'BACHS_API_KEY is not set');
   });
 
   test('returns wireguard.status = ok on exit code 0 of wg show', async () => {
