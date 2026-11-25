@@ -441,7 +441,24 @@ export class BachsGateway implements PaymentGateway {
   }
 
   private get webhookSecret(): string {
-    return this.configuredWebhookSecret ?? process.env.BACHS_WEBHOOK_SECRET ?? '';
+    return (
+      this.configuredWebhookSecret ??
+      process.env.BACHS_WEBHOOK_SECRET ??
+      (process.env.MOCK_SERVICES === 'true' ? 'mock_bachs_webhook_secret' : '')
+    );
+  }
+
+  createWebhookSignature(rawBody: string | Buffer | any, timestamp: string): string {
+    const payload = Buffer.isBuffer(rawBody)
+      ? rawBody.toString('utf8')
+      : typeof rawBody === 'string'
+        ? rawBody
+        : JSON.stringify(rawBody);
+
+    return crypto
+      .createHmac('sha256', this.webhookSecret)
+      .update(`${timestamp}.${payload}`)
+      .digest('hex');
   }
 
   verifyWebhookSignature(rawBody: string | Buffer | any, signature: string, timestamp?: string): boolean {
@@ -506,6 +523,15 @@ export class BachsGateway implements PaymentGateway {
   ): Promise<InitiatePaymentResult> {
     const params = parseInitiatePaymentParams(paramsOrEmail, amount, planId, paymentId, metadata);
 
+    if (process.env.MOCK_SERVICES === 'true') {
+      const mockReference = `chk_mock_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      return createInitiatePaymentResult(
+        mockReference,
+        mockReference,
+        `https://checkout.bachs.io/mock/${mockReference}`
+      );
+    }
+
     const response = await fetch(`${this.baseURL}/v1/checkout-sessions`, {
       method: 'POST',
       headers: {
@@ -545,6 +571,14 @@ export class BachsGateway implements PaymentGateway {
   }
 
   async verifyTransaction(reference: string): Promise<VerifyPaymentResult> {
+    if (process.env.MOCK_SERVICES === 'true') {
+      return {
+        status: 'pending',
+        amount: 0,
+        reference
+      };
+    }
+
     const response = await fetch(
       `${this.baseURL}/v1/checkout-sessions/${encodeURIComponent(reference)}`,
       {

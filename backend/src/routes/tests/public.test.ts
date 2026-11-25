@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'http';
 import { AddressInfo } from 'net';
 import express from 'express';
+import { RouterOSAPI } from 'node-routeros';
 import { prisma } from '../../database/db';
 import publicRoutes from '../public';
 
@@ -11,10 +12,30 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
   let baseUrl: string;
   let testPlanId: string;
   const originalEnv = { ...process.env };
+  let origConnect: any;
+  let origClose: any;
+  let origWrite: any;
 
   before(async () => {
     process.env.NODE_ENV = 'development';
-    process.env.PAYSTACK_SECRET_KEY = 'sk_test_mock_secret_key';
+    process.env.MOCK_SERVICES = 'true';
+    process.env.BACHS_WEBHOOK_SECRET = 'bachs_public_test_secret';
+
+    origConnect = RouterOSAPI.prototype.connect;
+    origClose = RouterOSAPI.prototype.close;
+    origWrite = RouterOSAPI.prototype.write;
+    (RouterOSAPI.prototype as any).connect = async function () {
+      return this;
+    };
+    (RouterOSAPI.prototype as any).close = async function () {
+      return this;
+    };
+    (RouterOSAPI.prototype as any).write = async function (command: string, args?: string[]) {
+      if (command === '/ip/hotspot/user/print') {
+        return [{ '.id': '*test-user-id', name: args?.[0]?.replace('?name=', '') || 'user' }];
+      }
+      return [];
+    };
 
     const app = express();
     app.use(express.json({
@@ -41,13 +62,16 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
 
   after(async () => {
     process.env = originalEnv;
+    (RouterOSAPI.prototype as any).connect = origConnect;
+    (RouterOSAPI.prototype as any).close = origClose;
+    (RouterOSAPI.prototype as any).write = origWrite;
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
     await prisma.$disconnect();
   });
 
-  test('POST /api/public/payment initiates Paystack payment and returns reference in dev mode', async () => {
+  test('POST /api/public/payment initiates Bachs payment and returns reference in mock mode', async () => {
     const testPhone = `+2547${Math.floor(10000000 + Math.random() * 90000000)}`;
 
     const res = await fetch(`${baseUrl}/payment`, {
@@ -69,7 +93,7 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
 
     assert.ok(reference, 'Expected reference in response');
     assert.ok(accessCode, 'Expected access_code in response');
-    assert.match(reference, /^mock_ref_/);
+    assert.match(reference, /^chk_mock_/);
 
     // Verify payment record in DB
     const payment = await prisma.payment.findFirst({
@@ -80,10 +104,10 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
     assert.equal(payment.status, 'PENDING');
   });
 
-  test('POST /api/public/payment/paystack/webhook updates payment and creates session on valid charge.success', async () => {
+  test('POST /api/public/payment/webhook updates payment and creates session on valid collection.succeeded', async () => {
     const crypto = await import('crypto');
-    const secret = process.env.PAYSTACK_SECRET_KEY || 'sk_test_mock_secret_key';
-    const testReference = 'ref_webhook_' + Date.now();
+    const secret = process.env.BACHS_WEBHOOK_SECRET || 'bachs_public_test_secret';
+    const testReference = 'chk_webhook_' + Date.now();
 
     // Create a user and a pending payment
     const user = await prisma.user.create({
@@ -103,12 +127,13 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
       }
     });
 
+    const timestamp = String(Math.floor(Date.now() / 1000));
     const payload = {
-      event: 'charge.success',
+      event: 'collection.succeeded',
       data: {
-        reference: testReference,
-        status: 'success',
-        amount: 2000,
+        checkout_id: testReference,
+        status: 'PAID',
+        amount: '20.00',
         metadata: {
           planId: testPlanId,
           paymentId: payment.id
@@ -116,13 +141,14 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
       }
     };
     const rawBody = JSON.stringify(payload);
-    const signature = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
+    const signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
 
-    const res = await fetch(`${baseUrl}/payment/paystack/webhook`, {
+    const res = await fetch(`${baseUrl}/payment/webhook`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-paystack-signature': signature
+        'x-bachs-signature': signature,
+        'x-bachs-timestamp': timestamp
       },
       body: rawBody
     });
@@ -250,7 +276,7 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
 
   test('Full payment-to-connection flow completes in dev mode', async () => {
     const crypto = await import('crypto');
-    const secret = process.env.PAYSTACK_SECRET_KEY || 'sk_test_mock_secret_key';
+    const secret = process.env.BACHS_WEBHOOK_SECRET || 'bachs_public_test_secret';
 
     // 1. Initiate payment (as portal does when clicking Pay)
     const initRes = await fetch(`${baseUrl}/payment`, {
@@ -274,15 +300,16 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
     const statusPendingBody = await statusPendingRes.json() as any;
     assert.equal(statusPendingBody.data.status, 'pending');
 
-    // 3. Webhook delivers charge.success
+    // 3. Webhook delivers collection.succeeded
     const payment = await prisma.payment.findFirst({ where: { checkoutRequestId: reference } });
     assert.ok(payment);
+    const timestamp = String(Math.floor(Date.now() / 1000));
     const webhookPayload = {
-      event: 'charge.success',
+      event: 'collection.succeeded',
       data: {
-        reference,
-        status: 'success',
-        amount: 5000,
+        checkout_id: reference,
+        status: 'PAID',
+        amount: '50.00',
         metadata: {
           planId: testPlanId,
           paymentId: payment.id
@@ -290,13 +317,14 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
       }
     };
     const rawBody = JSON.stringify(webhookPayload);
-    const signature = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
+    const signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
 
-    const webhookRes = await fetch(`${baseUrl}/payment/paystack/webhook`, {
+    const webhookRes = await fetch(`${baseUrl}/payment/webhook`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-paystack-signature': signature
+        'x-bachs-signature': signature,
+        'x-bachs-timestamp': timestamp
       },
       body: rawBody
     });

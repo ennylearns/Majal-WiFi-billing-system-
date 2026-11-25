@@ -4,9 +4,9 @@
 
 **Blocked by:** 02: Route Webhook Endpoint & Wire Fulfillment
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `PaymentService` defaults to `BachsGateway` when no gateway instance is injected.
-- [ ] In `MOCK_SERVICES=true` mode, initiating a payment schedules a simulated `collection.succeeded` webhook callback after 5 seconds with a valid HMAC-SHA256 signature and timestamp header.
-- [ ] End-to-end payment initiation, status polling fallback, and mock webhook fulfillment work seamlessly without external network calls.
-- [ ] Payment route and service tests pass with the wired `BachsGateway` and updated mock simulation.
+- [x] `PaymentService` defaults to `BachsGateway` when no gateway instance is injected.
+- [x] In `MOCK_SERVICES=true` mode, initiating a payment schedules a simulated `collection.succeeded` webhook callback after 5 seconds with a valid HMAC-SHA256 signature and timestamp header.
+- [x] End-to-end payment initiation, status polling fallback, and mock webhook fulfillment work seamlessly without external network calls.
+- [x] Payment route and service tests pass with the wired `BachsGateway` and updated mock simulation.

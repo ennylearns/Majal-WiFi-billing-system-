@@ -1,4 +1,4 @@
-import { describe, test, beforeEach } from 'node:test';
+import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import { PaymentService } from '../paymentService';
@@ -1738,6 +1738,85 @@ describe('PaymentService.handleWebhook — Bachs events & timestamp verification
     assert.equal(updated.paymentReference, 'chk_new_ref_999');
     assert.equal(fakeSession.sessions.length, 1);
     assert.equal(fakeSms.sentConfirmations.length, 1);
+  });
+});
+
+describe('PaymentService — default gateway & lazy initialization', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.BACHS_API_KEY;
+    delete process.env.MOCK_SERVICES;
+  });
+
+  test('defaults to BachsGateway when no gateway is injected and initializes lazily', () => {
+    // Construction without env vars should not throw at module load / instantiation time
+    const service = new PaymentService(makeFakePrisma() as any);
+
+    process.env.MOCK_SERVICES = 'true';
+    assert.ok((service as any).gateway instanceof BachsGateway);
+
+    process.env = originalEnv;
+  });
+});
+
+describe('PaymentService — mock mode 5s Bachs webhook simulation (MOCK_SERVICES=true)', () => {
+  const originalEnv = { ...process.env };
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, MOCK_SERVICES: 'true' };
+    delete process.env.BACHS_API_KEY;
+    delete process.env.BACHS_WEBHOOK_SECRET;
+    globalThis.fetch = async () => {
+      throw new Error('fetch should not be called in MOCK_SERVICES=true mode');
+    };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    globalThis.fetch = originalFetch;
+  });
+
+  test('schedules collection.succeeded webhook after 5s with valid signature and fulfills payment', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+
+    const user = existingUser({ phone: '+254712345678', email: 'mockflow@example.com' });
+    const plan = activePlan({ price: 500, duration: 2 });
+    const prisma = makeFakePrisma({ users: [user], plans: [plan] });
+    const fakeSession = new FakeSessionService(prisma);
+    const fakeSms = new FakeSmsService();
+    const service = new PaymentService(prisma, undefined, fakeSession as any, fakeSms as any);
+
+    const init = await service.initiatePayment({
+      planId: plan.id,
+      amount: plan.price,
+      phone: user.phone!,
+      email: user.email!,
+    });
+
+    assert.ok(init.reference.startsWith('chk_mock_'));
+
+    // Before 5s: still pending, no session provisioned
+    const beforePoll = await service.checkStatus(init.reference);
+    assert.equal(beforePoll.status, 'pending');
+    assert.equal(fakeSession.sessions.length, 0);
+
+    // Advance 5000ms and flush async microtasks from the timer callback
+    t.mock.timers.tick(5000);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const updated = prisma._payments.find((p: any) => p.checkoutRequestId === init.reference);
+    assert.equal(updated.status, 'COMPLETED');
+    assert.equal(updated.paymentReference, init.reference);
+    assert.equal(fakeSession.sessions.length, 1);
+    assert.equal(fakeSms.sentConfirmations.length, 1);
+
+    const afterPoll = await service.checkStatus(init.reference);
+    assert.equal(afterPoll.status, 'completed');
+    assert.ok(afterPoll.sessionToken);
   });
 });
 

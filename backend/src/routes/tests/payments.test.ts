@@ -610,4 +610,78 @@ describe('POST /api/payments/webhook & reserved segments - Integration Tests', (
     assert.equal(sessionCalls.length, 1);
     assert.equal(smsCalls.length, 1);
   });
+
+  test('end-to-end payment initiation, status polling fallback, and webhook fulfillment work offline in MOCK_SERVICES=true mode', async () => {
+    await prisma.session.deleteMany({ where: { userId: customer.id } });
+    sessionCalls = [];
+    smsCalls = [];
+    const prevMock = process.env.MOCK_SERVICES;
+    process.env.MOCK_SERVICES = 'true';
+
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = ((input: any, init?: any) => {
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (!url.startsWith('http://127.0.0.1')) {
+        throw new Error(`Unexpected external network call in mock mode: ${url}`);
+      }
+      return realFetch(input, init);
+    }) as typeof fetch;
+
+    try {
+      const initRes = await fetch(`${webhookBaseUrl}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: customer.phone,
+          email: customer.email,
+          planId: plan.id,
+          amount: plan.price,
+        }),
+      });
+      assert.equal(initRes.status, 200);
+      const initJson: any = await initRes.json();
+      assert.equal(initJson.success, true);
+      assert.ok(initJson.data.reference.startsWith('chk_mock_'));
+      assert.equal(initJson.data.access_code, initJson.data.reference);
+      assert.ok(initJson.data.authorization_url);
+
+      const createdPayment = await prisma.payment.findFirst({
+        where: { checkoutRequestId: initJson.data.reference },
+      });
+      if (createdPayment) {
+        createdPaymentIds.push(createdPayment.id);
+      }
+
+      // Polling fallback before 5s fulfillment returns pending without external fetch
+      const pollBefore = await fetch(`${webhookBaseUrl}/status/${initJson.data.reference}`);
+      assert.equal(pollBefore.status, 200);
+      const pollBeforeJson: any = await pollBefore.json();
+      assert.equal(pollBeforeJson.data.status, 'pending');
+
+      // Wait for the 5s simulated collection.succeeded webhook callback to complete
+      let pollAfterJson: any = null;
+      const deadline = Date.now() + 10000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const pollRes = await fetch(`${webhookBaseUrl}/status/${initJson.data.reference}`);
+        assert.equal(pollRes.status, 200);
+        pollAfterJson = await pollRes.json();
+        if (pollAfterJson.data.status === 'completed') {
+          break;
+        }
+      }
+
+      assert.equal(pollAfterJson?.data?.status, 'completed');
+      assert.ok(pollAfterJson?.data?.sessionToken);
+      assert.equal(sessionCalls.length, 1);
+      assert.equal(smsCalls.length, 1);
+    } finally {
+      globalThis.fetch = realFetch;
+      if (prevMock === undefined) {
+        delete process.env.MOCK_SERVICES;
+      } else {
+        process.env.MOCK_SERVICES = prevMock;
+      }
+    }
+  });
 });

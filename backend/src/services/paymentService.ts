@@ -1,5 +1,6 @@
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
-import { PaymentGateway, PaystackGateway } from './paymentGateway';
+import { BachsGateway, PaymentGateway } from './paymentGateway';
 import sessionServiceInstance, { SessionService, isValidMac, normalizeMac } from './sessionService';
 import smsServiceInstance from './smsService';
 import { prisma as defaultPrisma } from '../database/db';
@@ -90,21 +91,28 @@ export interface SmsServiceLike {
 
 export class PaymentService {
   private prisma: PrismaClient;
-  private gateway: PaymentGateway;
+  private gatewayInstance?: PaymentGateway;
   private sessionService: SessionServiceLike;
   private smsService: SmsServiceLike;
   private inFlightFulfillments = new Map<string, Promise<FulfillPaymentResult>>();
 
   constructor(
     prismaClient: PrismaClient = defaultPrisma,
-    gateway: PaymentGateway = new PaystackGateway(),
+    gateway?: PaymentGateway,
     sessionService: SessionServiceLike = sessionServiceInstance,
     smsService: SmsServiceLike = smsServiceInstance
   ) {
     this.prisma = prismaClient;
-    this.gateway = gateway;
+    this.gatewayInstance = gateway;
     this.sessionService = sessionService;
     this.smsService = smsService;
+  }
+
+  private get gateway(): PaymentGateway {
+    if (!this.gatewayInstance) {
+      this.gatewayInstance = new BachsGateway();
+    }
+    return this.gatewayInstance;
   }
 
   /**
@@ -166,6 +174,20 @@ export class PaymentService {
       data: { checkoutRequestId: gatewayResult.reference },
     });
 
+    if (process.env.MOCK_SERVICES === 'true') {
+      const timer = setTimeout(() => {
+        void this.simulateMockWebhook(
+          gatewayResult.reference,
+          amount,
+          planId,
+          (payment as any).id
+        );
+      }, 5000);
+      if (timer && typeof timer.unref === 'function') {
+        timer.unref();
+      }
+    }
+
     return {
       reference: gatewayResult.reference,
       access_code: gatewayResult.access_code,
@@ -173,6 +195,39 @@ export class PaymentService {
         ? { authorization_url: gatewayResult.authorization_url }
         : {}),
     };
+  }
+
+  private async simulateMockWebhook(
+    reference: string,
+    amount: number,
+    planId: string,
+    paymentId: string
+  ): Promise<void> {
+    try {
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const mockPayload = {
+        event: 'collection.succeeded',
+        data: {
+          checkout_id: reference,
+          status: 'PAID',
+          amount: amount.toFixed(2),
+          currency: 'NGN',
+          metadata: { paymentId, planId },
+        },
+      };
+      const rawBody = JSON.stringify(mockPayload);
+      const signature =
+        typeof (this.gateway as any).createWebhookSignature === 'function'
+          ? (this.gateway as any).createWebhookSignature(rawBody, timestamp)
+          : crypto
+              .createHmac('sha256', process.env.BACHS_WEBHOOK_SECRET || 'mock_bachs_webhook_secret')
+              .update(`${timestamp}.${rawBody}`)
+              .digest('hex');
+
+      await this.handleWebhook(rawBody, signature, timestamp);
+    } catch (error) {
+      console.error('Mock Bachs webhook callback error:', error);
+    }
   }
 
   /**

@@ -338,3 +338,53 @@ describe('BachsGateway - verifyWebhookSignature', () => {
     );
   });
 });
+
+describe('BachsGateway - Mock Mode (MOCK_SERVICES=true)', () => {
+  const originalEnv = process.env;
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    process.env = {
+      ...originalEnv,
+      NODE_ENV: 'test',
+      MOCK_SERVICES: 'true'
+    };
+    delete process.env.BACHS_API_KEY;
+    delete process.env.BACHS_WEBHOOK_SECRET;
+    globalThis.fetch = async () => {
+      throw new Error('fetch should not be called in MOCK_SERVICES=true mode');
+    };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    globalThis.fetch = originalFetch;
+  });
+
+  test('initiateTransaction and verifyTransaction work offline without fetch', async () => {
+    const gateway = new BachsGateway();
+    const init = await gateway.initiateTransaction({
+      email: 'mock@example.com',
+      amount: 1500,
+      planId: 'plan_1',
+      paymentId: 'pay_1'
+    });
+
+    assert.ok(init.reference.startsWith('chk_mock_'));
+    assert.equal(init.access_code, init.reference);
+    assert.ok(init.authorization_url && init.authorization_url.includes(init.reference));
+
+    const verify = await gateway.verifyTransaction(init.reference);
+    assert.equal(verify.status, 'pending');
+    assert.equal(verify.reference, init.reference);
+  });
+
+  test('signs and verifies webhooks using fallback mock secret when BACHS_WEBHOOK_SECRET is unset', () => {
+    const gateway = new BachsGateway();
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const rawBody = JSON.stringify({ event: 'collection.succeeded', data: { checkout_id: 'chk_mock_1' } });
+
+    const sig = gateway.createWebhookSignature(rawBody, timestamp);
+    assert.equal(gateway.verifyWebhookSignature(rawBody, sig, timestamp), true);
+  });
+});

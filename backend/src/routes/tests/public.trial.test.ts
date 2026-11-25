@@ -16,8 +16,10 @@ describe('Public Trial Routes - /api/public/trial', () => {
   let origConnect: any;
   let origClose: any;
   let origWrite: any;
+  const originalEnv = { ...process.env };
 
   before(async () => {
+    process.env.MOCK_SERVICES = 'true';
     // Stub RouterOS API so network calls do not attempt to contact real MikroTik
     writtenCommands = [];
     origConnect = RouterOSAPI.prototype.connect;
