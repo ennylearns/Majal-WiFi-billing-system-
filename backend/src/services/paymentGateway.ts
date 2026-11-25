@@ -86,127 +86,6 @@ export function createInitiatePaymentResult(
   return result;
 }
 
-export interface PaystackGatewayOptions {
-  secretKey?: string;
-  baseURL?: string;
-}
-
-export class PaystackGateway implements PaymentGateway {
-  private baseURL: string;
-  private configuredSecretKey?: string;
-
-  constructor(options: PaystackGatewayOptions = {}) {
-    this.baseURL = options.baseURL || 'https://api.paystack.co';
-    this.configuredSecretKey = options.secretKey;
-  }
-
-  private get secretKey(): string {
-    return this.configuredSecretKey || process.env.PAYSTACK_SECRET_KEY || '';
-  }
-
-  verifyWebhookSignature(rawBody: string | Buffer | any, signature: string): boolean {
-    if (!signature) {
-      return false;
-    }
-    const payload = typeof rawBody === 'string' || Buffer.isBuffer(rawBody)
-      ? rawBody
-      : JSON.stringify(rawBody);
-
-    const hash = crypto
-      .createHmac('sha512', this.secretKey)
-      .update(payload)
-      .digest('hex');
-
-    return hash === signature;
-  }
-
-  verifySignature(rawBody: string | Buffer | any, signature: string): boolean {
-    return this.verifyWebhookSignature(rawBody, signature);
-  }
-
-  async initiateTransaction(
-    paramsOrEmail: InitiatePaymentParams | string,
-    amount?: number,
-    planId?: string,
-    paymentId?: string,
-    metadata?: Record<string, any>
-  ): Promise<InitiatePaymentResult> {
-    const params = parseInitiatePaymentParams(paramsOrEmail, amount, planId, paymentId, metadata);
-
-    if (process.env.NODE_ENV === 'development') {
-      const mockReference = 'mock_ref_' + Date.now();
-      const mockAccessCode = 'mock_code_' + Date.now();
-
-      return createInitiatePaymentResult(
-        mockReference,
-        mockAccessCode,
-        `https://checkout.paystack.com/${mockAccessCode}`
-      );
-    }
-
-    const amountInKobo = Math.round(params.amount * 100);
-
-    const response = await fetch(`${this.baseURL}/transaction/initialize`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.secretKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        email: params.email,
-        amount: amountInKobo,
-        currency: 'NGN',
-        metadata: {
-          planId: params.planId,
-          paymentId: params.paymentId,
-          ...(params.metadata || {})
-        }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to initialize Paystack transaction: ${response.statusText}`);
-    }
-
-    const data: any = await response.json();
-    return createInitiatePaymentResult(
-      data.data.reference,
-      data.data.access_code,
-      data.data.authorization_url
-    );
-  }
-
-  async verifyTransaction(reference: string): Promise<VerifyPaymentResult> {
-    if (reference.startsWith('mock_ref_')) {
-      return {
-        status: 'pending',
-        amount: 10000,
-        reference
-      };
-    }
-
-    const response = await fetch(`${this.baseURL}/transaction/verify/${encodeURIComponent(reference)}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.secretKey}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to verify Paystack transaction: ${response.statusText}`);
-    }
-
-    const data: any = await response.json();
-    return {
-      status: data.data.status,
-      amount: data.data.amount,
-      reference: data.data.reference,
-      paidAt: data.data.paid_at,
-      metadata: data.data.metadata
-    };
-  }
-}
-
 export interface FakePaymentGatewayOptions {
   secretKey?: string;
   defaultStatus?: string;
@@ -229,7 +108,7 @@ export class FakePaymentGateway implements PaymentGateway {
   private forcedSignatureValidity: boolean | null = null;
 
   constructor(options: FakePaymentGatewayOptions = {}) {
-    this.secretKey = options.secretKey || 'fake_paystack_secret_key';
+    this.secretKey = options.secretKey || 'fake_webhook_secret';
     this.referencePrefix = options.referencePrefix || 'fake_ref_';
     this.defaultStatus = options.defaultStatus || 'success';
   }
@@ -614,7 +493,4 @@ export class BachsGateway implements PaymentGateway {
     };
   }
 }
-
-export const paystackGateway = new PaystackGateway();
-export default paystackGateway;
 

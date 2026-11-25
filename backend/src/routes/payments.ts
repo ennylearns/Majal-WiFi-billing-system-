@@ -118,18 +118,6 @@ router.post('/webhook', async (req: Request, res: Response) => {
   }
 });
 
-// Paystack webhook
-router.post('/paystack/webhook', async (req: Request, res: Response) => {
-  try {
-    const signature = (req.headers['x-paystack-signature'] as string) || '';
-    const rawBody = (req as any).rawBody || req.body;
-    await paymentService.handleWebhook(rawBody, signature);
-  } catch (error) {
-    console.error('Paystack webhook error:', error);
-  }
-  res.status(200).send('OK');
-});
-
 // ---------------------------------------------------------------------------
 // Authenticated customer endpoints
 // ---------------------------------------------------------------------------

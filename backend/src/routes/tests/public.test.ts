@@ -173,19 +173,6 @@ describe('Public Payment Routes - POST /api/public/payment', () => {
     assert.ok(session, 'Expected active session to be created');
   });
 
-  test('POST /api/public/payment/paystack/webhook always responds 200 OK even on invalid signature', async () => {
-    const res = await fetch(`${baseUrl}/payment/paystack/webhook`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-paystack-signature': 'invalid_signature_hex'
-      },
-      body: JSON.stringify({ event: 'charge.success', data: { reference: 'unknown' } })
-    });
-
-    assert.equal(res.status, 200);
-  });
-
   test('GET /api/public/payment/status/:checkoutRequestId returns pending status for pending payment', async () => {
     const testRef = 'ref_pending_' + Date.now();
     const user = await prisma.user.create({

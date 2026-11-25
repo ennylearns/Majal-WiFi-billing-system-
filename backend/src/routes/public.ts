@@ -13,7 +13,7 @@ const router = express.Router();
 // This preserves the existing public URL contracts:
 //   POST   /api/public/payment              → initiate payment
 //   GET    /api/public/payment/status/:ref  → check payment status
-//   POST   /api/public/payment/paystack/webhook → Paystack webhook
+//   POST   /api/public/payment/webhook      → Bachs webhook
 router.use('/payment', paymentsRouter);
 
 // Get all active routers (public location info only)

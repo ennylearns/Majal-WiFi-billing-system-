@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import {
   PaymentGateway,
-  PaystackGateway,
+  BachsGateway,
   FakePaymentGateway,
   parseInitiatePaymentParams,
   createInitiatePaymentResult
@@ -43,226 +43,17 @@ describe('PaymentGateway - Parameter Parsing & Result Creation', () => {
     const result = createInitiatePaymentResult(
       'ref_100',
       'code_200',
-      'https://checkout.paystack.com/code_200'
+      'https://checkout.bachs.io/code_200'
     );
 
     assert.equal(result.reference, 'ref_100');
     assert.equal(result.access_code, 'code_200');
     assert.equal(result.accessCode, 'code_200');
-    assert.equal(result.authorization_url, 'https://checkout.paystack.com/code_200');
-    assert.equal(result.checkoutUrl, 'https://checkout.paystack.com/code_200');
+    assert.equal(result.authorization_url, 'https://checkout.bachs.io/code_200');
+    assert.equal(result.checkoutUrl, 'https://checkout.bachs.io/code_200');
 
     // Non-enumerable accessors do not pollute Object.keys
     assert.deepEqual(Object.keys(result).sort(), ['access_code', 'authorization_url', 'reference'].sort());
-  });
-});
-
-describe('PaystackGateway - Production Adapter', () => {
-  const secretKey = 'sk_test_paystack_gateway_secret';
-  const originalEnv = process.env;
-  let originalFetch: typeof globalThis.fetch;
-
-  beforeEach(() => {
-    process.env = {
-      ...originalEnv,
-      NODE_ENV: 'test',
-      PAYSTACK_SECRET_KEY: secretKey
-    };
-    originalFetch = globalThis.fetch;
-  });
-
-  afterEach(() => {
-    process.env = originalEnv;
-    globalThis.fetch = originalFetch;
-  });
-
-  test('initiateTransaction issues POST to Paystack initialize with kobo conversion and auth headers', async () => {
-    let capturedUrl = '';
-    let capturedInit: any;
-
-    globalThis.fetch = (async (url: any, init?: any) => {
-      capturedUrl = url.toString();
-      capturedInit = init;
-      return new Response(
-        JSON.stringify({
-          status: true,
-          data: {
-            reference: 'paystack_ref_999',
-            access_code: 'access_code_999',
-            authorization_url: 'https://checkout.paystack.com/access_code_999'
-          }
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }) as any;
-
-    const gateway = new PaystackGateway({ secretKey });
-    const result = await gateway.initiateTransaction({
-      email: 'customer@domain.com',
-      amount: 450,
-      planId: 'plan-1',
-      paymentId: 'pay-1',
-      metadata: { routerId: 'r-1' }
-    });
-
-    assert.equal(capturedUrl, 'https://api.paystack.co/transaction/initialize');
-    assert.equal(capturedInit?.method, 'POST');
-    assert.equal(capturedInit?.headers?.['Authorization'], `Bearer ${secretKey}`);
-    assert.equal(capturedInit?.headers?.['Content-Type'], 'application/json');
-
-    const body = JSON.parse(capturedInit?.body);
-    assert.equal(body.email, 'customer@domain.com');
-    assert.equal(body.amount, 45000); // 450 * 100 in kobo
-    assert.equal(body.currency, 'NGN');
-    assert.equal(body.metadata?.planId, 'plan-1');
-    assert.equal(body.metadata?.paymentId, 'pay-1');
-    assert.equal(body.metadata?.routerId, 'r-1');
-
-    assert.equal(result.reference, 'paystack_ref_999');
-    assert.equal(result.access_code, 'access_code_999');
-    assert.equal(result.accessCode, 'access_code_999');
-    assert.equal(result.authorization_url, 'https://checkout.paystack.com/access_code_999');
-    assert.equal(result.checkoutUrl, 'https://checkout.paystack.com/access_code_999');
-  });
-
-  test('initiateTransaction supports positional parameter calling style', async () => {
-    globalThis.fetch = (async () => {
-      return new Response(
-        JSON.stringify({
-          status: true,
-          data: {
-            reference: 'ref_positional',
-            access_code: 'code_positional'
-          }
-        }),
-        { status: 200 }
-      );
-    }) as any;
-
-    const gateway = new PaystackGateway({ secretKey });
-    const result = await gateway.initiateTransaction(
-      'positional@domain.com',
-      100,
-      'plan-pos',
-      'pay-pos'
-    );
-
-    assert.equal(result.reference, 'ref_positional');
-    assert.equal(result.access_code, 'code_positional');
-  });
-
-  test('initiateTransaction throws an error when HTTP status is not ok', async () => {
-    globalThis.fetch = (async () => {
-      return new Response('Unauthorized', { status: 401, statusText: 'Unauthorized' });
-    }) as any;
-
-    const gateway = new PaystackGateway({ secretKey });
-    await assert.rejects(
-      async () => {
-        await gateway.initiateTransaction('fail@domain.com', 100, 'plan-f', 'pay-f');
-      },
-      {
-        message: 'Failed to initialize Paystack transaction: Unauthorized'
-      }
-    );
-  });
-
-  test('verifyTransaction sends GET request with encoded reference and auth header', async () => {
-    let capturedUrl = '';
-    let capturedInit: any;
-
-    globalThis.fetch = (async (url: any, init?: any) => {
-      capturedUrl = url.toString();
-      capturedInit = init;
-      return new Response(
-        JSON.stringify({
-          status: true,
-          data: {
-            status: 'success',
-            amount: 75000,
-            reference: 'ref/with/slash',
-            paid_at: '2026-10-29T00:00:00Z',
-            metadata: { customField: 'value' }
-          }
-        }),
-        { status: 200 }
-      );
-    }) as any;
-
-    const gateway = new PaystackGateway({ secretKey });
-    const result = await gateway.verifyTransaction('ref/with/slash');
-
-    assert.equal(capturedUrl, 'https://api.paystack.co/transaction/verify/ref%2Fwith%2Fslash');
-    assert.equal(capturedInit?.method, 'GET');
-    assert.equal(capturedInit?.headers?.['Authorization'], `Bearer ${secretKey}`);
-
-    assert.equal(result.status, 'success');
-    assert.equal(result.amount, 75000);
-    assert.equal(result.reference, 'ref/with/slash');
-    assert.equal(result.paidAt, '2026-10-29T00:00:00Z');
-    assert.deepEqual(result.metadata, { customField: 'value' });
-  });
-
-  test('verifyTransaction throws when HTTP status is not ok', async () => {
-    globalThis.fetch = (async () => {
-      return new Response('Not Found', { status: 404, statusText: 'Not Found' });
-    }) as any;
-
-    const gateway = new PaystackGateway({ secretKey });
-    await assert.rejects(
-      async () => {
-        await gateway.verifyTransaction('missing_ref');
-      },
-      {
-        message: 'Failed to verify Paystack transaction: Not Found'
-      }
-    );
-  });
-
-  test('verifyWebhookSignature validates HMAC SHA-512 correctly', () => {
-    const gateway = new PaystackGateway({ secretKey });
-    const payload = JSON.stringify({ event: 'charge.success', data: { reference: 'ref_123' } });
-
-    const validSignature = crypto
-      .createHmac('sha512', secretKey)
-      .update(payload)
-      .digest('hex');
-
-    assert.equal(gateway.verifyWebhookSignature(payload, validSignature), true);
-    assert.equal(gateway.verifySignature(payload, validSignature), true);
-
-    // Invalid signature returns false
-    assert.equal(gateway.verifyWebhookSignature(payload, 'wrong_hex_signature'), false);
-
-    // Empty signature returns false
-    assert.equal(gateway.verifyWebhookSignature(payload, ''), false);
-
-    // Buffer payload is accepted
-    const bufferPayload = Buffer.from(payload, 'utf8');
-    assert.equal(gateway.verifyWebhookSignature(bufferPayload, validSignature), true);
-  });
-
-  test('supports custom baseURL and secretKey via constructor', async () => {
-    let capturedUrl = '';
-    let capturedAuth = '';
-
-    globalThis.fetch = (async (url: any, init?: any) => {
-      capturedUrl = url.toString();
-      capturedAuth = init?.headers?.['Authorization'];
-      return new Response(
-        JSON.stringify({ status: true, data: { reference: 'c_ref', access_code: 'c_code' } }),
-        { status: 200 }
-      );
-    }) as any;
-
-    const customGateway = new PaystackGateway({
-      baseURL: 'https://sandbox.custom-gateway.io',
-      secretKey: 'custom_secret_123'
-    });
-
-    await customGateway.initiateTransaction('custom@domain.com', 10, 'p1', 'pay1');
-    assert.equal(capturedUrl, 'https://sandbox.custom-gateway.io/transaction/initialize');
-    assert.equal(capturedAuth, 'Bearer custom_secret_123');
   });
 });
 
@@ -359,14 +150,14 @@ describe('FakePaymentGateway - In-Memory Test Fake', () => {
   });
 
   test('allows simulating verification failures', async () => {
-    fakeGateway.setFailVerification(new Error('Paystack verification service unavailable'));
+    fakeGateway.setFailVerification(new Error('Gateway verification service unavailable'));
 
     await assert.rejects(
       async () => {
         await fakeGateway.verifyTransaction('any_ref');
       },
       {
-        message: 'Paystack verification service unavailable'
+        message: 'Gateway verification service unavailable'
       }
     );
   });
@@ -410,7 +201,12 @@ describe('FakePaymentGateway - In-Memory Test Fake', () => {
 
 describe('PaymentGateway - Polymorphism & Interface Interactivity', () => {
   // Test consumer that relies only on the PaymentGateway seam
-  async function performCheckoutFlow(gateway: PaymentGateway, email: string, amount: number) {
+  async function performCheckoutFlow(
+    gateway: PaymentGateway,
+    email: string,
+    amount: number,
+    signPayload: (payload: string, timestamp: string) => string
+  ) {
     const init = await gateway.initiateTransaction({
       email,
       amount,
@@ -419,51 +215,69 @@ describe('PaymentGateway - Polymorphism & Interface Interactivity', () => {
     });
 
     const verify = await gateway.verifyTransaction(init.reference);
-    const signature = crypto
-      .createHmac('sha512', 'shared_secret')
-      .update(JSON.stringify({ ref: init.reference }))
-      .digest('hex');
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const payload = JSON.stringify({ ref: init.reference });
+    const signature = signPayload(payload, timestamp);
 
-    const isValid = gateway.verifyWebhookSignature(
-      JSON.stringify({ ref: init.reference }),
-      signature
-    );
+    const isValid = gateway.verifyWebhookSignature(payload, signature, timestamp);
 
     return { init, verify, isValid };
   }
 
-  test('both PaystackGateway and FakePaymentGateway satisfy the PaymentGateway seam', async () => {
+  test('both BachsGateway and FakePaymentGateway satisfy the PaymentGateway seam', async () => {
     const fakeGateway = new FakePaymentGateway({ secretKey: 'shared_secret' });
-    const fakeResult = await performCheckoutFlow(fakeGateway, 'test@fake.com', 100);
+    const fakeResult = await performCheckoutFlow(
+      fakeGateway,
+      'test@fake.com',
+      100,
+      (payload) =>
+        crypto.createHmac('sha512', 'shared_secret').update(payload).digest('hex')
+    );
 
     assert.ok(fakeResult.init.reference);
     assert.ok(fakeResult.init.access_code);
     assert.equal(fakeResult.verify.status, 'success');
     assert.equal(fakeResult.isValid, true);
 
-    // Now test with PaystackGateway with mocked fetch
+    // Now test with BachsGateway with mocked fetch
     let fetchCount = 0;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: any) => {
       fetchCount++;
       const urlStr = url.toString();
-      if (urlStr.includes('/initialize')) {
-        return new Response(JSON.stringify({
-          status: true,
-          data: { reference: 'real_ref_1', access_code: 'real_code_1' }
-        }));
+      if (urlStr.includes('/v1/checkout-sessions') && fetchCount === 1) {
+        return new Response(
+          JSON.stringify({
+            checkout_id: 'chk_real_1',
+            checkout_url: 'https://checkout.bachs.io/chk_real_1'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
       }
-      return new Response(JSON.stringify({
-        status: true,
-        data: { status: 'success', amount: 10000, reference: 'real_ref_1' }
-      }));
+      return new Response(
+        JSON.stringify({
+          checkout_id: 'chk_real_1',
+          status: 'PAID',
+          pricing: { amount: 100 }
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
     }) as any;
 
     try {
-      const realGateway = new PaystackGateway({ secretKey: 'shared_secret' });
-      const realResult = await performCheckoutFlow(realGateway, 'test@real.com', 100);
+      const realGateway = new BachsGateway({
+        apiKey: 'sk_sandbox_shared',
+        webhookSecret: 'shared_secret'
+      });
+      const realResult = await performCheckoutFlow(
+        realGateway,
+        'test@real.com',
+        100,
+        (payload, timestamp) =>
+          crypto.createHmac('sha256', 'shared_secret').update(`${timestamp}.${payload}`).digest('hex')
+      );
 
-      assert.equal(realResult.init.reference, 'real_ref_1');
+      assert.equal(realResult.init.reference, 'chk_real_1');
       assert.equal(realResult.verify.status, 'success');
       assert.equal(realResult.isValid, true);
       assert.equal(fetchCount, 2);
