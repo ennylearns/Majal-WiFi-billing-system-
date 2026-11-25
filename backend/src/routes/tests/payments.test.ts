@@ -1,12 +1,15 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'http';
+import crypto from 'crypto';
 import { AddressInfo } from 'net';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../database/db';
-import paymentsRoutes from '../payments';
+import paymentsRoutes, { createPaymentsRouter } from '../payments';
 import adminRoutes from '../admin';
+import { PaymentService } from '../../services/paymentService';
+import { BachsGateway } from '../../services/paymentGateway';
 
 describe('Payment History & Admin Payment Queries - Integration Tests', () => {
   let server: http.Server;
@@ -384,5 +387,227 @@ describe('Payment History & Admin Payment Queries - Integration Tests', () => {
     const bodyPhone: any = await resPhone.json();
     assert.ok(bodyPhone.data.payments.length > 0);
     assert.ok(bodyPhone.data.payments.every((p: any) => p.userId === customer2.id));
+  });
+});
+
+describe('POST /api/payments/webhook & reserved segments - Integration Tests', () => {
+  let server: http.Server;
+  let webhookBaseUrl: string;
+  let customer: any;
+  let customerToken: string;
+  let testRouter: any;
+  let plan: any;
+  const createdPaymentIds: string[] = [];
+  const webhookSecret = 'bachs_http_integration_secret';
+  const JWT_SECRET = 'test_jwt_secret_webhook_route';
+  const originalEnv = { ...process.env };
+
+  let sessionCalls: any[] = [];
+  let smsCalls: any[] = [];
+
+  function signBachs(rawBody: string, timestamp: string): string {
+    return crypto
+      .createHmac('sha256', webhookSecret)
+      .update(`${timestamp}.${rawBody}`)
+      .digest('hex');
+  }
+
+  before(async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.JWT_SECRET = JWT_SECRET;
+
+    const gateway = new BachsGateway({
+      apiKey: 'sk_sandbox_http_test',
+      webhookSecret,
+    });
+    const fakeSessionService = {
+      async createSession(userId: string, planId: string, sessionToken: string, phone?: string, email?: string) {
+        sessionCalls.push({ userId, planId, sessionToken, phone, email });
+        return prisma.session.create({
+          data: {
+            userId,
+            planId,
+            sessionToken,
+            phone,
+            email,
+            status: 'ACTIVE',
+            startTime: new Date(),
+            endTime: new Date(Date.now() + 60 * 60 * 1000),
+          },
+        });
+      },
+    };
+    const fakeSmsService = {
+      async sendPaymentConfirmation(phone: string, amount: number, receiptNumber: string) {
+        smsCalls.push({ phone, amount, receiptNumber });
+        return true;
+      },
+    };
+
+    const paymentService = new PaymentService(prisma, gateway, fakeSessionService, fakeSmsService);
+
+    const app = express();
+    app.use(
+      express.json({
+        verify: (req: any, _res, buf) => {
+          req.rawBody = buf;
+        },
+      })
+    );
+    app.use('/api/payments', createPaymentsRouter(paymentService));
+
+    server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    webhookBaseUrl = `http://127.0.0.1:${port}/api/payments`;
+
+    customer = await prisma.user.create({
+      data: {
+        phone: `+254733${Math.floor(100000 + Math.random() * 900000)}`,
+        email: `wh_cust_${Date.now()}@example.com`,
+        role: 'CUSTOMER',
+        isActive: true,
+      },
+    });
+    customerToken = jwt.sign({ userId: customer.id }, JWT_SECRET);
+
+    testRouter = await prisma.router.create({
+      data: {
+        name: 'Webhook Test Router',
+        location: 'Zone W',
+        host: '192.168.88.20',
+        port: 8728,
+        username: 'admin',
+        password: 'password123',
+      },
+    });
+
+    plan = await prisma.plan.create({
+      data: {
+        name: 'Webhook Plan',
+        description: '1 hour',
+        price: 100,
+        duration: 60,
+        dataLimit: '1GB',
+        speedLimit: '5Mbps',
+        routerId: testRouter.id,
+      },
+    });
+  });
+
+  after(async () => {
+    process.env = originalEnv;
+    await prisma.session.deleteMany({ where: { userId: customer.id } });
+    if (createdPaymentIds.length > 0) {
+      await prisma.payment.deleteMany({ where: { id: { in: createdPaymentIds } } });
+    }
+    await prisma.plan.deleteMany({ where: { id: plan.id } });
+    await prisma.router.deleteMany({ where: { id: testRouter.id } });
+    await prisma.user.deleteMany({ where: { id: customer.id } });
+
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+  });
+
+  test('GET /api/payments/webhook hits reserved segment check and returns 400 Invalid payment ID', async () => {
+    const res = await fetch(`${webhookBaseUrl}/webhook`, {
+      headers: { Authorization: `Bearer ${customerToken}` },
+    });
+    assert.equal(res.status, 400);
+    const body: any = await res.json();
+    assert.equal(body.error, 'Invalid payment ID');
+  });
+
+  test('POST /api/payments/webhook rejects invalid signature and expired timestamp with 401', async () => {
+    const rawBody = JSON.stringify({
+      event: 'collection.succeeded',
+      data: { checkout_id: 'chk_invalid_sig' },
+    });
+    const nowTs = String(Math.floor(Date.now() / 1000));
+
+    const invalidRes = await fetch(`${webhookBaseUrl}/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Bachs-Signature': 'bad_signature',
+        'X-Bachs-Timestamp': nowTs,
+      },
+      body: rawBody,
+    });
+    assert.equal(invalidRes.status, 401);
+
+    const expiredTs = String(Math.floor(Date.now() / 1000) - 400);
+    const expiredRes = await fetch(`${webhookBaseUrl}/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Bachs-Signature': signBachs(rawBody, expiredTs),
+        'X-Bachs-Timestamp': expiredTs,
+      },
+      body: rawBody,
+    });
+    assert.equal(expiredRes.status, 401);
+  });
+
+  test('POST /api/payments/webhook fulfills once across dual-fired collection.succeeded and checkout.completed', async () => {
+    sessionCalls = [];
+    smsCalls = [];
+
+    const payment = await prisma.payment.create({
+      data: {
+        userId: customer.id,
+        planId: plan.id,
+        amount: 100,
+        status: 'PENDING',
+        checkoutRequestId: `chk_http_${Date.now()}`,
+      },
+    });
+    createdPaymentIds.push(payment.id);
+
+    const ts = String(Math.floor(Date.now() / 1000));
+    const collectionBody = JSON.stringify({
+      event: 'collection.succeeded',
+      data: {
+        checkout_id: payment.checkoutRequestId,
+        metadata: { paymentId: payment.id },
+      },
+    });
+
+    const res1 = await fetch(`${webhookBaseUrl}/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Bachs-Signature': signBachs(collectionBody, ts),
+        'X-Bachs-Timestamp': ts,
+      },
+      body: collectionBody,
+    });
+    assert.equal(res1.status, 200);
+
+    const checkoutBody = JSON.stringify({
+      event: 'checkout.completed',
+      data: {
+        checkout_id: payment.checkoutRequestId,
+        metadata: { paymentId: payment.id },
+      },
+    });
+
+    const res2 = await fetch(`${webhookBaseUrl}/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Bachs-Signature-V2': signBachs(checkoutBody, ts),
+        'X-Bachs-Timestamp': ts,
+      },
+      body: checkoutBody,
+    });
+    assert.equal(res2.status, 200);
+
+    const updated = await prisma.payment.findUnique({ where: { id: payment.id } });
+    assert.equal(updated?.status, 'COMPLETED');
+    assert.equal(updated?.paymentReference, payment.checkoutRequestId);
+    assert.equal(sessionCalls.length, 1);
+    assert.equal(smsCalls.length, 1);
   });
 });

@@ -1,7 +1,8 @@
 import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'crypto';
 import { PaymentService } from '../paymentService';
-import { FakePaymentGateway } from '../paymentGateway';
+import { BachsGateway, FakePaymentGateway } from '../paymentGateway';
 
 // ---------------------------------------------------------------------------
 // In-memory Prisma stub
@@ -1624,6 +1625,119 @@ describe('Payment fulfillment - Seamless In-Session Trial Upgrade', () => {
     assert.equal(fakeSessionService.createdSessions.length, 1);
     assert.ok(result.sessionToken);
     assert.notEqual(result.sessionToken, 'trial_token_old');
+  });
+});
+
+describe('PaymentService.handleWebhook — Bachs events & timestamp verification', () => {
+  const webhookSecret = 'bachs_wh_secret_test';
+  let gateway: BachsGateway;
+  let prisma: any;
+  let fakeSession: FakeSessionService;
+  let fakeSms: FakeSmsService;
+  let service: PaymentService;
+  let user: FakeUser;
+  let plan: FakePlan;
+
+  function signBachsPayload(rawBody: string, timestamp: string): string {
+    return crypto
+      .createHmac('sha256', webhookSecret)
+      .update(`${timestamp}.${rawBody}`)
+      .digest('hex');
+  }
+
+  beforeEach(() => {
+    user = existingUser({ phone: '+254712345678', email: 'bachs@example.com' });
+    plan = activePlan({ duration: 2 });
+    gateway = new BachsGateway({
+      apiKey: 'sk_sandbox_test_key',
+      webhookSecret,
+    });
+    prisma = makeFakePrisma({ users: [user], plans: [plan] });
+    fakeSession = new FakeSessionService(prisma);
+    fakeSms = new FakeSmsService();
+    service = new PaymentService(prisma, gateway, fakeSession as any, fakeSms as any);
+  });
+
+  test('rejects missing or expired timestamp when verifying Bachs signature', async () => {
+    const rawBody = JSON.stringify({ event: 'collection.succeeded', data: { checkout_id: 'chk_1' } });
+    const expiredTs = String(Math.floor(Date.now() / 1000) - 400);
+    const expiredSig = signBachsPayload(rawBody, expiredTs);
+
+    await assert.rejects(
+      () => service.handleWebhook(rawBody, expiredSig, expiredTs),
+      { message: /invalid webhook signature/i }
+    );
+
+    await assert.rejects(
+      () => service.handleWebhook(rawBody, expiredSig),
+      { message: /invalid webhook signature/i }
+    );
+  });
+
+  test('processes collection.succeeded via data.checkout_id and deduplicates dual-fired checkout.completed', async () => {
+    const payment = await prisma.payment.create({
+      data: {
+        userId: user.id,
+        planId: plan.id,
+        amount: 200,
+        status: 'PENDING',
+        checkoutRequestId: 'chk_dual_001',
+      },
+    });
+
+    const ts = String(Math.floor(Date.now() / 1000));
+    const collectionBody = JSON.stringify({
+      event: 'collection.succeeded',
+      data: {
+        checkout_id: 'chk_dual_001',
+        metadata: { paymentId: payment.id },
+      },
+    });
+    const checkoutBody = JSON.stringify({
+      event: 'checkout.completed',
+      data: {
+        checkout_id: 'chk_dual_001',
+        metadata: { paymentId: payment.id },
+      },
+    });
+
+    await service.handleWebhook(collectionBody, signBachsPayload(collectionBody, ts), ts);
+    await service.handleWebhook(checkoutBody, signBachsPayload(checkoutBody, ts), ts);
+
+    const updated = prisma._payments.find((p: any) => p.id === payment.id);
+    assert.equal(updated.status, 'COMPLETED');
+    assert.equal(updated.paymentReference, 'chk_dual_001');
+    assert.equal(fakeSession.sessions.length, 1);
+    assert.equal(fakeSms.sentConfirmations.length, 1);
+  });
+
+  test('processes checkout.completed resolving payment via metadata.paymentId fallback', async () => {
+    const payment = await prisma.payment.create({
+      data: {
+        userId: user.id,
+        planId: plan.id,
+        amount: 200,
+        status: 'PENDING',
+        checkoutRequestId: 'chk_initial_old',
+      },
+    });
+
+    const ts = String(Math.floor(Date.now() / 1000));
+    const rawBody = JSON.stringify({
+      event: 'checkout.completed',
+      data: {
+        checkout_id: 'chk_new_ref_999',
+        metadata: { paymentId: payment.id },
+      },
+    });
+
+    await service.handleWebhook(rawBody, signBachsPayload(rawBody, ts), ts);
+
+    const updated = prisma._payments.find((p: any) => p.id === payment.id);
+    assert.equal(updated.status, 'COMPLETED');
+    assert.equal(updated.paymentReference, 'chk_new_ref_999');
+    assert.equal(fakeSession.sessions.length, 1);
+    assert.equal(fakeSms.sentConfirmations.length, 1);
   });
 });
 

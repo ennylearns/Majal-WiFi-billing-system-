@@ -183,9 +183,10 @@ export class PaymentService {
    */
   async handleWebhook(
     rawBody: string | Buffer | any,
-    signature: string
+    signature: string,
+    timestamp?: string
   ): Promise<{ received: boolean }> {
-    const isValid = this.gateway.verifyWebhookSignature(rawBody, signature);
+    const isValid = this.gateway.verifyWebhookSignature(rawBody, signature, timestamp);
     if (!isValid) {
       throw new Error('Invalid webhook signature');
     }
@@ -195,9 +196,13 @@ export class PaymentService {
         ? JSON.parse(rawBody.toString())
         : rawBody;
 
-    if (payload.event === 'charge.success') {
-      const reference = payload.data?.reference;
-      const paymentId = payload.data?.metadata?.paymentId;
+    if (
+      payload.event === 'collection.succeeded' ||
+      payload.event === 'checkout.completed' ||
+      payload.event === 'charge.success'
+    ) {
+      const reference = payload.data?.checkout_id ?? payload.data?.reference;
+      const paymentId = payload.data?.metadata?.paymentId ?? payload.metadata?.paymentId;
       const customerEmail = payload.data?.customer?.email;
       const customerPhone = payload.data?.customer?.phone;
       const customerInfo = {

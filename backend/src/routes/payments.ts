@@ -1,10 +1,11 @@
 import express, { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
-import paymentService from '../services/paymentService';
+import defaultPaymentService, { PaymentService } from '../services/paymentService';
 import { isValidMac } from '../services/sessionService';
 
-const router = express.Router();
+export function createPaymentsRouter(paymentService: PaymentService = defaultPaymentService) {
+  const router = express.Router();
 
 // ---------------------------------------------------------------------------
 // Public endpoints (no authentication required)
@@ -97,6 +98,26 @@ router.post('/fulfill', async (req: Request, res: Response) => {
   }
 });
 
+// Bachs webhook
+router.post('/webhook', async (req: Request, res: Response) => {
+  try {
+    const signature =
+      (req.headers['x-bachs-signature-v2'] as string) ||
+      (req.headers['x-bachs-signature'] as string) ||
+      '';
+    const timestamp = (req.headers['x-bachs-timestamp'] as string) || undefined;
+    const rawBody = (req as any).rawBody ?? req.body;
+    await paymentService.handleWebhook(rawBody, signature, timestamp);
+    return res.status(200).send('OK');
+  } catch (error: any) {
+    if (error?.message === 'Invalid webhook signature') {
+      return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
+    }
+    console.error('Payment webhook error:', error);
+    return res.status(500).json({ success: false, error: 'Webhook processing failed' });
+  }
+});
+
 // Paystack webhook
 router.post('/paystack/webhook', async (req: Request, res: Response) => {
   try {
@@ -130,7 +151,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     const { id } = req.params;
 
     // Exclude route-reserved segments that are handled by other handlers
-    const reservedSegments = ['status', 'paystack'];
+    const reservedSegments = ['status', 'webhook'];
     if (reservedSegments.some((seg) => req.params.id === seg)) {
       return res.status(400).json({ success: false, error: 'Invalid payment ID' });
     }
@@ -147,4 +168,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   }
 });
 
-export default router;
+  return router;
+}
+
+export default createPaymentsRouter();
