@@ -35,8 +35,8 @@ export interface PaymentGateway {
 
   verifyTransaction(reference: string): Promise<VerifyPaymentResult>;
 
-  verifyWebhookSignature(rawBody: string | Buffer | any, signature: string): boolean;
-  verifySignature?(rawBody: string | Buffer | any, signature: string): boolean;
+  verifyWebhookSignature(rawBody: string | Buffer | any, signature: string, timestamp?: string): boolean;
+  verifySignature?(rawBody: string | Buffer | any, signature: string, timestamp?: string): boolean;
 }
 
 export function parseInitiatePaymentParams(
@@ -394,6 +394,190 @@ export class FakePaymentGateway implements PaymentGateway {
 
   clear(): void {
     this.reset();
+  }
+}
+
+export interface BachsGatewayOptions {
+  apiKey?: string;
+  webhookSecret?: string;
+  baseURL?: string;
+  paymentMethods?: string[];
+}
+
+export class BachsGateway implements PaymentGateway {
+  private readonly baseURL: string;
+  private readonly apiKey: string;
+  private readonly configuredWebhookSecret?: string;
+  private readonly configuredPaymentMethods?: string[];
+
+  constructor(options: BachsGatewayOptions = {}) {
+    const isMockMode = process.env.MOCK_SERVICES === 'true';
+    const apiKey = options.apiKey ?? process.env.BACHS_API_KEY ?? '';
+
+    if (!isMockMode) {
+      if (!apiKey) {
+        throw new Error('BACHS_API_KEY is required in non-mock mode');
+      }
+      if (!apiKey.startsWith('sk_sandbox_') && !apiKey.startsWith('sk_live_')) {
+        throw new Error('Invalid BACHS_API_KEY: must start with sk_sandbox_ or sk_live_');
+      }
+    }
+
+    this.apiKey = apiKey;
+    this.configuredWebhookSecret = options.webhookSecret;
+    this.configuredPaymentMethods = options.paymentMethods;
+
+    if (options.baseURL) {
+      this.baseURL = options.baseURL;
+    } else if (apiKey.startsWith('sk_live_')) {
+      this.baseURL = 'https://api.bachs.io';
+    } else {
+      this.baseURL = 'https://sandbox-api.bachs.io';
+    }
+  }
+
+  getBaseURL(): string {
+    return this.baseURL;
+  }
+
+  private get webhookSecret(): string {
+    return this.configuredWebhookSecret ?? process.env.BACHS_WEBHOOK_SECRET ?? '';
+  }
+
+  verifyWebhookSignature(rawBody: string | Buffer | any, signature: string, timestamp?: string): boolean {
+    const secret = this.webhookSecret;
+    if (!signature || !timestamp || !secret) {
+      return false;
+    }
+
+    const parsedTimestamp = Number(timestamp);
+    if (!Number.isFinite(parsedTimestamp)) {
+      return false;
+    }
+
+    if (Math.abs(Date.now() / 1000 - parsedTimestamp) > 300) {
+      return false;
+    }
+
+    const payload = Buffer.isBuffer(rawBody)
+      ? rawBody.toString('utf8')
+      : typeof rawBody === 'string'
+        ? rawBody
+        : JSON.stringify(rawBody);
+
+    const expectedHash = crypto
+      .createHmac('sha256', secret)
+      .update(`${timestamp}.${payload}`)
+      .digest('hex');
+
+    const expectedBuffer = Buffer.from(expectedHash, 'utf8');
+    const actualBuffer = Buffer.from(signature, 'utf8');
+    if (expectedBuffer.length !== actualBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  }
+
+  verifySignature(rawBody: string | Buffer | any, signature: string, timestamp?: string): boolean {
+    return this.verifyWebhookSignature(rawBody, signature, timestamp);
+  }
+
+  private get paymentMethods(): string[] {
+    if (this.configuredPaymentMethods && this.configuredPaymentMethods.length > 0) {
+      return this.configuredPaymentMethods;
+    }
+    const envMethods = process.env.BACHS_PAYMENT_METHODS;
+    if (envMethods) {
+      const parsed = envMethods.split(',').map((m) => m.trim()).filter(Boolean);
+      if (parsed.length > 0) {
+        return parsed;
+      }
+    }
+    return ['NGN_CARD', 'NGN_BANK_TRANSFER'];
+  }
+
+  async initiateTransaction(
+    paramsOrEmail: InitiatePaymentParams | string,
+    amount?: number,
+    planId?: string,
+    paymentId?: string,
+    metadata?: Record<string, any>
+  ): Promise<InitiatePaymentResult> {
+    const params = parseInitiatePaymentParams(paramsOrEmail, amount, planId, paymentId, metadata);
+
+    const response = await fetch(`${this.baseURL}/v1/checkout-sessions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        pricing: {
+          currency: 'NGN',
+          amount: params.amount.toFixed(2)
+        },
+        billing_currency: 'NGN',
+        payment_method_types: this.paymentMethods,
+        customer_creation: 'if_required',
+        customer: { email: params.email },
+        reference: params.paymentId,
+        metadata: {
+          paymentId: params.paymentId,
+          planId: params.planId,
+          ...(params.metadata || {})
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to initialize Bachs checkout session: ${response.statusText}`);
+    }
+
+    const data: any = await response.json();
+    const payload = data.data ?? data;
+
+    return createInitiatePaymentResult(
+      payload.checkout_id,
+      payload.checkout_id,
+      payload.checkout_url
+    );
+  }
+
+  async verifyTransaction(reference: string): Promise<VerifyPaymentResult> {
+    const response = await fetch(
+      `${this.baseURL}/v1/checkout-sessions/${encodeURIComponent(reference)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to verify Bachs checkout session: ${response.statusText}`);
+    }
+
+    const data: any = await response.json();
+    const payload = data.data ?? data;
+
+    let status = 'pending';
+    if (payload.status === 'PAID') {
+      status = 'success';
+    } else if (payload.status === 'EXPIRED' || payload.status === 'FAILED') {
+      status = 'failed';
+    }
+
+    const amount = Number(payload.pricing?.amount ?? payload.amount ?? 0);
+
+    return {
+      status,
+      amount,
+      reference: payload.checkout_id || reference,
+      paidAt: payload.paid_at,
+      metadata: payload.metadata
+    };
   }
 }
 
