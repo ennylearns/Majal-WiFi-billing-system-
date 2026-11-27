@@ -521,7 +521,7 @@ export class SessionService {
       });
       return sessions.map((s: any) => ({
         ...s,
-        dataUsed: Number(s.dataUsed),
+        ...(s.dataUsed != null ? { dataUsed: Number(s.dataUsed) } : {}),
       }));
     } catch (error) {
       console.error('Error getting user sessions:', error);
